@@ -1,0 +1,221 @@
+version: '3.4'
+
+# This is an example docker-compose file to quickly test an IPFS Cluster
+# with multiple peers on a contained environment.
+
+# It runs 3 cluster peers (cluster0, cluster1...) attached to kubo daemons
+# (ipfs0, ipfs1...) using the CRDT consensus component. Cluster peers
+# autodiscover themselves using mDNS on the docker internal network.
+#
+# To interact with the cluster use "ipfs-cluster-ctl" (the cluster0 API port is
+# exposed to the locahost. You can also "docker exec -ti cluster0 sh" and run
+# it from the container. "ipfs-cluster-ctl peers ls" should show all 3 peers a few
+# seconds after start.
+#
+# For persistence, a "compose" folder is created and used to store configurations
+# and states. This can be used to edit configurations in subsequent runs. It looks
+# as follows:
+#
+# compose/
+# |-- cluster0
+# |-- cluster1
+# |-- ...
+# |-- ipfs0
+# |-- ipfs1
+# |-- ...
+#
+# During the first start, default configurations are created for all peers.
+networks:
+  public:
+  auki:
+  replica:
+
+services:
+
+##################################################################################
+## Cluster PEER 0 on Private Network #############################################
+##################################################################################
+
+  ipfs0:
+    container_name: ipfs0
+    image: ipfs/kubo:release
+    # ports:
+      # - "127.0.0.1:5001:5001"
+    volumes:
+      - ./compose/ipfs0:/data/ipfs
+      # - ./swarm.key:/data/ipfs/swarm.key
+      # - ./remove-bootstrap.sh:/container-init.d/remove-bootstrap.sh
+      # - ./test/data:/data/test-data
+
+  auki:
+    container_name: auki
+    image: ipfs/ipfs-cluster:latest
+    depends_on:
+      - ipfs0
+    environment:
+      CLUSTER_PEERNAME: auki
+      CLUSTER_SECRET: ${CLUSTER_SECRET} # From shell variable if set
+      CLUSTER_IPFSHTTP_NODEMULTIADDRESS: /dns4/ipfs0/tcp/5001
+      CLUSTER_IPFSPROXY_NODEMULTIADDRESS: /dns4/ipfs0/tcp/5001
+      CLUSTER_RESTAPI_HTTPLISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9094
+      CLUSTER_IPFSPROXY_LISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9095
+      CLUSTER_CRDT_TRUSTEDPEERS: "" # No trusted peers
+      CLUSTER_MONITORPINGINTERVAL: 2s # Speed up peer discovery
+    ports:
+      # Open API port (allows ipfs-cluster-ctl usage on host)
+      - "127.0.0.1:9094:9094" # Cluster API endpoint
+      # The cluster swarm port would need  to be exposed if this container
+      # was to connect to cluster peers on other hosts.
+      # But this is just a testing cluster.
+      - "127.0.0.1:9095:9095" # Cluster IPFS Proxy endpoint
+      # - "9096:9096" # Cluster swarm endpoint
+      # - "9097:9097" # Cluster PIN Service API endpoint
+    volumes:
+      - ./compose/auki:/data/ipfs-cluster
+      # - ./test/data:/data/test-data     
+
+##################################################################################
+## Cluster PEER 1 on Private Network #############################################
+##################################################################################
+
+# See Cluster PEER 0 for comments (all removed here and below)
+  ipfs1:
+    container_name: ipfs1 
+    image: ipfs/kubo:release
+    volumes:
+      - ./compose/ipfs1:/data/ipfs
+      # - ./swarm.key:/data/ipfs/swarm.key
+
+  cluster1:
+    container_name: cluster1
+    image: ipfs/ipfs-cluster:latest
+    depends_on:
+      - ipfs1
+      - auki
+    environment:
+      CLUSTER_PEERNAME: cluster1
+      CLUSTER_SECRET: ${CLUSTER_SECRET}
+      CLUSTER_IPFSHTTP_NODEMULTIADDRESS: /dns4/ipfs1/tcp/5001
+      CLUSTER_IPFSPROXY_NODEMULTIADDRESS: /dns4/ipfs1/tcp/5001
+      CLUSTER_RESTAPI_HTTPLISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9094
+      CLUSTER_IPFSPROXY_LISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9095
+      CLUSTER_CRDT_TRUSTEDPEERS: "*"
+      CLUSTER_MONITORPINGINTERVAL: 2s # Speed up peer discovery
+    volumes:
+      - ./compose/cluster1:/data/ipfs-cluster
+      # - ./test/data:/data/test-data
+    ports:
+      - "127.0.0.1:9096:9094"
+      - "127.0.0.1:9097:9095"
+
+  # See Cluster PEER 0 for comments (all removed here and below)
+  ipfs2:
+    container_name: ipfs2
+    image: ipfs/kubo:release
+    volumes:
+      - ./compose/ipfs2:/data/ipfs
+
+  cluster2:
+    container_name: cluster2
+    image: ipfs/ipfs-cluster:latest
+    depends_on:
+      - ipfs2
+      - cluster1 
+    environment:
+      CLUSTER_PEERNAME: cluster2
+      CLUSTER_SECRET: ${CLUSTER_SECRET}
+      CLUSTER_IPFSHTTP_NODEMULTIADDRESS: /dns4/ipfs2/tcp/5001
+      CLUSTER_CRDT_TRUSTEDPEERS: "*"
+      CLUSTER_MONITORPINGINTERVAL: 2s # Speed up peer discovery
+    volumes:
+      - ./compose/cluster2:/data/ipfs-cluster
+  
+  # See Cluster PEER 0 for comments (all removed here and below)
+  badnode:
+    container_name: badnode
+    image: ipfs/kubo:release
+    volumes:
+      - ./compose/badnode:/data/ipfs
+      # - ./swarm.key:/data/ipfs/swarm.key
+
+  bad-cluster:
+    container_name: bad-cluster
+    image: ipfs/ipfs-cluster:latest
+    depends_on:
+      - badnode
+      - cluster2
+    environment:
+      CLUSTER_PEERNAME: bad-cluster
+      CLUSTER_IPFSHTTP_NODEMULTIADDRESS: /dns4/badnode/tcp/5001
+      CLUSTER_CRDT_TRUSTEDPEERS: '*'
+      CLUSTER_MONITORPINGINTERVAL: 2s # Speed up peer discovery
+    volumes:
+      - ./compose/bad-cluster:/data/ipfs-cluster
+      - ./test/data:/data/test-data
+
+##################################################################################
+## A public IPFS node ############################################################
+##################################################################################
+
+  public-ipfs:
+    container_name: public-ipfs
+    image: ipfs/kubo:release
+    volumes:
+      - ./compose/public-ipfs:/data/ipfs
+      - ./test/data:/data/test-data
+    networks:
+      - public
+
+##################################################################################
+## A bacalhau Requester Node using public-ipfs as storage provider ###############
+##################################################################################
+
+  bacalhau:
+    container_name: public-requester
+    image: ghcr.io/bacalhau-project/bacalhau:latest
+    command: "serve --node-type=requester --web-ui --private-internal-ipfs=false --ipfs-connect=/dns4/public-ipfs/tcp/5001"
+    restart: always
+    depends_on:
+      - public-ipfs
+    volumes:
+      - ./compose/public-requester:/data/ipfs
+    ports:
+      - "1234:80"
+
+  master:
+    image: chrislusf/seaweedfs # use a remote image
+    ports:
+      - 9333:9333
+      - 19333:19333
+      - 9324:9324
+    command: "master -ip=master -ip.bind=0.0.0.0"
+  volume:
+    image: chrislusf/seaweedfs # use a remote image
+    ports:
+      - 8080:8080
+      - 18080:18080
+      - 9325:9325
+    command: 'volume -mserver="master:9333" -ip.bind=0.0.0.0 -port=8080'
+    depends_on:
+      - master
+  volume2:
+    image: chrislusf/seaweedfs # use a remote image
+    ports:
+      - 8081:8080
+      - 18081:18080
+      - 9326:9325
+    command: 'volume -mserver="master:9333" -ip.bind=0.0.0.0 -port=8080'
+    depends_on:
+      - master
+  filer:
+    image: chrislusf/seaweedfs # use a remote image
+    ports:
+      - 8888:8888
+      - 18888:18888
+      - 9327:9326
+    command: 'filer -master="master:9333" -ip.bind=0.0.0.0'
+    tty: true
+    stdin_open: true
+    depends_on:
+      - master
+      - volume

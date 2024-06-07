@@ -1,0 +1,27 @@
+namespace Libposemesh;
+
+union Node { DomainServer, BasicNode }
+
+struct NodeInfo {
+  id:ubyte;
+  name:ubyte;
+  type:ubyte;
+  latency:long;
+  cpu:int;
+  gpu:int;
+  memory:ubyte;
+}
+
+table BasicNode {
+  info:NodeInfo;
+}
+
+table DomainServer {
+  info:NodeInfo;
+  data_size_limit:string;
+  request_size_limit:string;
+  data_type_blacklist:[string];
+  data_type_handlers:[string];
+}
+
+root_type BasicNode;
