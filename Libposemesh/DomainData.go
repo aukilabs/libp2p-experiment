@@ -41,15 +41,19 @@ func (rcv *DomainData) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *DomainData) Id() []byte {
+func (rcv *DomainData) DataOffset() uint32 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+		return rcv._tab.GetUint32(o + rcv._tab.Pos)
 	}
-	return nil
+	return 0
 }
 
-func (rcv *DomainData) Name() []byte {
+func (rcv *DomainData) MutateDataOffset(n uint32) bool {
+	return rcv._tab.MutateUint32Slot(4, n)
+}
+
+func (rcv *DomainData) Id() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -57,7 +61,7 @@ func (rcv *DomainData) Name() []byte {
 	return nil
 }
 
-func (rcv *DomainData) DataType() []byte {
+func (rcv *DomainData) DomainId() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -65,64 +69,55 @@ func (rcv *DomainData) DataType() []byte {
 	return nil
 }
 
-func (rcv *DomainData) Version() int64 {
+func (rcv *DomainData) Name() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
-		return rcv._tab.GetInt64(o + rcv._tab.Pos)
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *DomainData) DataType() AnyDomainData {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		return AnyDomainData(rcv._tab.GetByte(o + rcv._tab.Pos))
 	}
 	return 0
 }
 
-func (rcv *DomainData) MutateVersion(n int64) bool {
-	return rcv._tab.MutateInt64Slot(10, n)
+func (rcv *DomainData) MutateDataType(n AnyDomainData) bool {
+	return rcv._tab.MutateByteSlot(12, byte(n))
 }
 
-func (rcv *DomainData) Data(j int) int8 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+func (rcv *DomainData) Data(obj *flatbuffers.Table) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.GetInt8(a + flatbuffers.UOffsetT(j*1))
-	}
-	return 0
-}
-
-func (rcv *DomainData) DataLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func (rcv *DomainData) MutateData(j int, n int8) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.MutateInt8(a+flatbuffers.UOffsetT(j*1), n)
+		rcv._tab.Union(obj, o)
+		return true
 	}
 	return false
 }
 
 func DomainDataStart(builder *flatbuffers.Builder) {
-	builder.StartObject(5)
+	builder.StartObject(6)
+}
+func DomainDataAddDataOffset(builder *flatbuffers.Builder, dataOffset uint32) {
+	builder.PrependUint32Slot(0, dataOffset, 0)
 }
 func DomainDataAddId(builder *flatbuffers.Builder, id flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(id), 0)
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(id), 0)
+}
+func DomainDataAddDomainId(builder *flatbuffers.Builder, domainId flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(domainId), 0)
 }
 func DomainDataAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(name), 0)
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(name), 0)
 }
-func DomainDataAddDataType(builder *flatbuffers.Builder, dataType flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(dataType), 0)
-}
-func DomainDataAddVersion(builder *flatbuffers.Builder, version int64) {
-	builder.PrependInt64Slot(3, version, 0)
+func DomainDataAddDataType(builder *flatbuffers.Builder, dataType AnyDomainData) {
+	builder.PrependByteSlot(4, byte(dataType), 0)
 }
 func DomainDataAddData(builder *flatbuffers.Builder, data flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(data), 0)
-}
-func DomainDataStartDataVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(1, numElems, 1)
+	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(data), 0)
 }
 func DomainDataEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

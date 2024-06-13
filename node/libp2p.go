@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aukilabs/go-libp2p-experiment/Libposemesh"
 	"github.com/aukilabs/go-libp2p-experiment/config"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -26,7 +26,9 @@ const DATA_NODE = "DATA"
 const BOOSTRAP_NODE = "BOOTSTRAP"
 const DISCOVERY_NODE = "DOMAIN_SERVICE"
 const ADAM_PROTOCOL_ID = "/posemesh/adam/1.0.0"
-const DOMAIN_DATA_PROTOCOL_ID = "/posemesh/domain/1.0.0"
+const UPLOAD_DOMAIN_DATA_PROTOCOL_ID = "/posemesh/upload_domain/1.0.0"
+const DOWNLOAD_DOMAIN_DATA_PROTOCOL_ID = "/posemesh/download_domain/1.0.0"
+const DOMAIN_AUTH_PROTOCOL_ID = "/posemesh/domain_auth/1.0.0"
 const ON_TASK_DONE_CALLBACK_PROTOCOL_ID = "/posemesh/callback/task_done/1.0.0"
 const FETCH_DOMAINS_PROTOCOL_ID = "/posemesh/fetch_domains/1.0.0"
 const CREATE_DOMAIN_PROTOCOL_ID = "/posemesh/create_domain/1.0.0"
@@ -283,12 +285,16 @@ func run() {
 	for _, node := range cfg.NodeTypes {
 		// h2.SetStreamHandler(ON_TASK_DONE_CALLBACK_PROTOCOL_ID, OnTaskDoneStreamHandler(h2))
 		if node == DATA_NODE {
-			h2.SetStreamHandler(DOMAIN_DATA_PROTOCOL_ID, ReceiveDomainDataHandler(h2))
+			h2.SetStreamHandler(UPLOAD_DOMAIN_DATA_PROTOCOL_ID, ReceiveDomainDataHandler(h2, func(ctx context.Context, dd *Libposemesh.DomainData) error {
+				go classifyDomainData(ctx, dd)
+				return nil
+			}))
 		}
 		if node == ADAM_NODE {
 			h2.SetStreamHandler(ADAM_PROTOCOL_ID, ReceiveVideoForPoseRefinement(h2))
 		}
 		if node == DISCOVERY_NODE {
+			h2.SetStreamHandler(DOMAIN_AUTH_PROTOCOL_ID, DomainAuthHandler)
 			portalTopic, err := ps.Join(PortalTopic)
 			if err != nil {
 				panic(err)
@@ -440,27 +446,6 @@ func run() {
 	log.Printf("\rExiting...\n")
 
 	os.Exit(0)
-}
-
-// discoveryNotifee gets notified when we find a new peer via mDNS discovery
-type discoveryNotifee struct {
-	h host.Host
-}
-
-// HandlePeerFound connects to peers discovered via mDNS. Once they're connected,
-// the PubSub system will automatically start interacting with them if they also
-// support PubSub.
-func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
-	log.Printf("discovered new peer %s\n", pi.ID)
-	err := n.h.Connect(context.Background(), pi)
-	if err != nil {
-		log.Printf("error connecting to peer %s: %s\n", pi.ID, err)
-	}
-}
-
-func setupMDNS(h host.Host) error {
-	s := mdns.NewMdnsService(h, PosemeshService, &discoveryNotifee{h: h})
-	return s.Start()
 }
 
 func configureDHT(ctx context.Context, host host.Host, kademliaDHT *dht.IpfsDHT) {

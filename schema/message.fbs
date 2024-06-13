@@ -1,0 +1,31 @@
+include "domain_data.fbs";
+namespace Libposemesh;
+
+union AnyMsg { AuthDomainReq, DownloadDomainDataReq, UploadDomainDataReq, Error, DownloadDomainDataResp }
+
+table AuthDomainReq {
+  domain_id:string;
+}
+
+table DownloadDomainDataReq {
+  domain_id:string;
+}
+
+table Error {
+  error:string;
+}
+
+table UploadDomainDataReq {
+  data:[DomainData];
+}
+
+table DownloadDomainDataResp {
+  data:[DomainData];
+}
+
+table Msg {
+  id:string;
+  data:AnyMsg;
+}
+
+root_type Msg;

@@ -1,0 +1,8 @@
+namespace Libposemesh;
+
+table Domain {
+  id:string;
+  name:string;
+  writer:string;
+  readers:[string];
+}

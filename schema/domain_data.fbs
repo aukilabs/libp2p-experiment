@@ -1,15 +1,21 @@
 namespace Libposemesh;
 
-table DomainData {
-  id:string;
+table GenericDomainData {
   name:string;
   data_type:string;
-  version:long;
   data:[byte];
 }
 
-table DomainDataList {
-  data:[DomainData];
+table Partition {
+  data:[bool];
 }
 
-root_type DomainData;
+union AnyDomainData { GenericDomainData, Partition }
+
+table DomainData {
+  data_offset:uint32;
+  id:string;
+  domain_id:string;
+  name:string;
+  data:AnyDomainData;
+}

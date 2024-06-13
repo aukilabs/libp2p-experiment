@@ -23,5 +23,3 @@ table DomainServer {
   data_type_blacklist:[string];
   data_type_handlers:[string];
 }
-
-root_type BasicNode;

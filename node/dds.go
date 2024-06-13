@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log"
 	"os"
 	"time"
 
+	"github.com/aukilabs/go-libp2p-experiment/Libposemesh"
 	"github.com/aukilabs/go-libp2p-experiment/config"
+	flatbuffers "github.com/google/flatbuffers/go"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -203,5 +206,43 @@ func LoadDomainsStreamHandler(s network.Stream) {
 	if err := json.NewEncoder(s).Encode(domainList); err != nil {
 		log.Println(err)
 		return
+	}
+}
+
+func DomainAuthHandler(s network.Stream) {
+	defer s.Close()
+	buf, err := io.ReadAll(s)
+	if err != nil {
+		s.Write([]byte("failed to read data"))
+		log.Println(err)
+		return
+	}
+	payload := Libposemesh.GetSizePrefixedRootAsAuthDomainReq(buf, 0)
+	for _, domain := range domainList {
+		if domain.PublicKey == string(payload.DomainId()) {
+			builder := flatbuffers.NewBuilder(0)
+			domainID := builder.CreateString(domain.PublicKey)
+			domainName := builder.CreateString(domain.Name)
+			writer := builder.CreateString(string(domain.DataNodes[0]))
+
+			Libposemesh.DomainStartReadersVector(builder, len(domain.DataNodes[1:]))
+			for _, reader := range domain.DataNodes[1:] {
+				r := builder.CreateString(string(reader))
+				builder.PrependUOffsetT(r)
+			}
+			readers := builder.EndVector(len(domain.DataNodes[1:]))
+
+			Libposemesh.DomainStart(builder)
+			Libposemesh.DomainAddId(builder, domainID)
+			Libposemesh.DomainAddName(builder, domainName)
+			Libposemesh.DomainAddWriter(builder, writer)
+			Libposemesh.DomainAddReaders(builder, readers)
+			d := Libposemesh.DomainEnd(builder)
+			builder.FinishSizePrefixed(d)
+			if _, err := s.Write(builder.FinishedBytes()); err != nil {
+				log.Println(err)
+			}
+			return
+		}
 	}
 }
