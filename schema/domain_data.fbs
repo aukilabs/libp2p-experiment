@@ -10,12 +10,30 @@ table Partition {
   data:[bool];
 }
 
-union AnyDomainData { GenericDomainData, Partition }
+table Portal {
+  name:string;
+  size:float;
+  short_id:string;
+}
+
+table Pose {
+  px:float;
+  py:float;
+  pz:float;
+  rx:float;
+  ry:float;
+  rz:float;
+  size:float;
+  short_id:string;
+}
+
+union AnyDomainData { GenericDomainData, Partition, Pose }
 
 table DomainData {
   data_offset:uint32;
-  id:string;
+  id:string (deprecated);
   domain_id:string;
   name:string;
+  version:string;
   data:AnyDomainData;
 }

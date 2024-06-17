@@ -2,6 +2,11 @@ package config
 
 import dht "github.com/libp2p/go-libp2p-kad-dht"
 
+const ADAM_NODE = "ADAM"
+const DATA_NODE = "DATA"
+const BOOSTRAP_NODE = "BOOTSTRAP"
+const DISCOVERY_NODE = "DOMAIN_SERVICE"
+
 type Config struct {
 	NodeTypes        []string    `cli:"node-types" usage:"The type of node to run" dft:"adam,domaindata"`
 	Mode             dht.ModeOpt `cli:"mode" usage:"The mode of the node" dft:"server"`
@@ -11,3 +16,5 @@ type Config struct {
 	Name             string      `cli:"name" usage:"The name of the node" dft:""`
 	OwnerWallet      string      `cli:"owner-wallet" usage:"The wallet of the owner" dft:""`
 }
+
+var DefaultBootstrapNodes = []string{"/ip4/127.0.0.1/tcp/18804/p2p/12D3KooWJ86dj5s4AQRcNRhG3hqWioSsN3uGR55LVY7nx3eSttik", "/ip4/127.0.0.1/tcp/18805/p2p/12D3KooWLQUrSJJ8PvZ3iWT5mw14qiiuux8eV6irZMZZNDc368xk"}

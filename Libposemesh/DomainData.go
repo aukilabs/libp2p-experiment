@@ -53,14 +53,6 @@ func (rcv *DomainData) MutateDataOffset(n uint32) bool {
 	return rcv._tab.MutateUint32Slot(4, n)
 }
 
-func (rcv *DomainData) Id() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
-	}
-	return nil
-}
-
 func (rcv *DomainData) DomainId() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
@@ -77,8 +69,16 @@ func (rcv *DomainData) Name() []byte {
 	return nil
 }
 
-func (rcv *DomainData) DataType() AnyDomainData {
+func (rcv *DomainData) Version() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *DomainData) DataType() AnyDomainData {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		return AnyDomainData(rcv._tab.GetByte(o + rcv._tab.Pos))
 	}
@@ -86,11 +86,11 @@ func (rcv *DomainData) DataType() AnyDomainData {
 }
 
 func (rcv *DomainData) MutateDataType(n AnyDomainData) bool {
-	return rcv._tab.MutateByteSlot(12, byte(n))
+	return rcv._tab.MutateByteSlot(14, byte(n))
 }
 
 func (rcv *DomainData) Data(obj *flatbuffers.Table) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
 		rcv._tab.Union(obj, o)
 		return true
@@ -99,13 +99,10 @@ func (rcv *DomainData) Data(obj *flatbuffers.Table) bool {
 }
 
 func DomainDataStart(builder *flatbuffers.Builder) {
-	builder.StartObject(6)
+	builder.StartObject(7)
 }
 func DomainDataAddDataOffset(builder *flatbuffers.Builder, dataOffset uint32) {
 	builder.PrependUint32Slot(0, dataOffset, 0)
-}
-func DomainDataAddId(builder *flatbuffers.Builder, id flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(id), 0)
 }
 func DomainDataAddDomainId(builder *flatbuffers.Builder, domainId flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(domainId), 0)
@@ -113,11 +110,14 @@ func DomainDataAddDomainId(builder *flatbuffers.Builder, domainId flatbuffers.UO
 func DomainDataAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(name), 0)
 }
+func DomainDataAddVersion(builder *flatbuffers.Builder, version flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(version), 0)
+}
 func DomainDataAddDataType(builder *flatbuffers.Builder, dataType AnyDomainData) {
-	builder.PrependByteSlot(4, byte(dataType), 0)
+	builder.PrependByteSlot(5, byte(dataType), 0)
 }
 func DomainDataAddData(builder *flatbuffers.Builder, data flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(data), 0)
+	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(data), 0)
 }
 func DomainDataEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

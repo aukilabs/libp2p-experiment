@@ -49,11 +49,37 @@ func (rcv *DownloadDomainDataReq) DomainId() []byte {
 	return nil
 }
 
+func (rcv *DownloadDomainDataReq) Name() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *DownloadDomainDataReq) Type() int8 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		return rcv._tab.GetInt8(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *DownloadDomainDataReq) MutateType(n int8) bool {
+	return rcv._tab.MutateInt8Slot(8, n)
+}
+
 func DownloadDomainDataReqStart(builder *flatbuffers.Builder) {
-	builder.StartObject(1)
+	builder.StartObject(3)
 }
 func DownloadDomainDataReqAddDomainId(builder *flatbuffers.Builder, domainId flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(domainId), 0)
+}
+func DownloadDomainDataReqAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(name), 0)
+}
+func DownloadDomainDataReqAddType(builder *flatbuffers.Builder, type_ int8) {
+	builder.PrependInt8Slot(2, type_, 0)
 }
 func DownloadDomainDataReqEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

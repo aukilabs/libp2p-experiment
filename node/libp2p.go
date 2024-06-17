@@ -1,109 +1,102 @@
-package main
+package node
 
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"log"
 	"os"
 	"os/signal"
+	"path"
+	"sync"
 	"syscall"
 	"time"
 
-	"github.com/aukilabs/go-libp2p-experiment/Libposemesh"
 	"github.com/aukilabs/go-libp2p-experiment/config"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
 )
 
-const ADAM_NODE = "ADAM"
-const DATA_NODE = "DATA"
-const BOOSTRAP_NODE = "BOOTSTRAP"
-const DISCOVERY_NODE = "DOMAIN_SERVICE"
-const ADAM_PROTOCOL_ID = "/posemesh/adam/1.0.0"
-const UPLOAD_DOMAIN_DATA_PROTOCOL_ID = "/posemesh/upload_domain/1.0.0"
-const DOWNLOAD_DOMAIN_DATA_PROTOCOL_ID = "/posemesh/download_domain/1.0.0"
-const DOMAIN_AUTH_PROTOCOL_ID = "/posemesh/domain_auth/1.0.0"
-const ON_TASK_DONE_CALLBACK_PROTOCOL_ID = "/posemesh/callback/task_done/1.0.0"
-const FETCH_DOMAINS_PROTOCOL_ID = "/posemesh/fetch_domains/1.0.0"
-const CREATE_DOMAIN_PROTOCOL_ID = "/posemesh/create_domain/1.0.0"
-const CREATE_PORTAL_PROTOCOL_ID = "/posemesh/create_portal/1.0.0"
 const PosemeshService = "posemesh"
 const NodeInfoTopic = "posemesh_nodes"
 const PortalTopic = "portals"
 const DomainTopic = "domains"
 
-var cfgFlag = flag.String("config", "adamNodeCfg", "config")
-var cfg config.Config
-var basePath = "volume/" + cfg.Name
-
-func main() {
-	if cfgFlag == nil {
-		log.Fatal("config flag is required")
-	}
-	flag.Parse()
-	switch *cfgFlag {
-	case "adam-1":
-		cfg = adamNode1Cfg
-	case "adam-2":
-		cfg = adamNode2Cfg
-	case "data-1":
-		cfg = dataNodeCfg
-	case "data-2":
-		cfg = replicationNodeCfg
-	case "dds-1":
-		cfg = domainServiceNodeCfg
-	case "dds-2":
-		cfg = domainServiceNode2Cfg
-	case "camera":
-		cfg = cameraAppCfg
-	case "dmt":
-		cfg = dmtCfg
-	}
-	basePath = "volume/" + cfg.Name
-	run()
+type NodeInfo struct {
+	Types []string `json:"node_types"`
+	ID    peer.ID  `json:"id"`
+	Name  string   `json:"name"`
 }
 
-type nodeInfo struct {
-	Type string  `json:"node_type"`
-	ID   peer.ID `json:"id"`
-	Name string  `json:"name"`
+type Node struct {
+	NodeInfo
+	host.Host
+	neighbors map[peer.ID]*NodeInfo
+	jobList   map[string]JobInfo
+	mutex     sync.RWMutex
+	BasePath  string
+	identity  crypto.PrivKey
 }
-type stepInfo struct {
+
+func NewNode(info NodeInfo, basePath string) (node *Node, err error) {
+	p := path.Join(basePath, info.Name)
+	priv := initPeerIdentity(p)
+	info.ID, err = peer.IDFromPublicKey(priv.GetPublic())
+	if err != nil {
+		return nil, err
+	}
+	node = &Node{
+		NodeInfo:  info,
+		neighbors: make(map[peer.ID]*NodeInfo),
+		jobList:   make(map[string]JobInfo),
+		mutex:     sync.RWMutex{},
+		BasePath:  p,
+		identity:  priv,
+	}
+	return node, nil
+}
+
+func (n *Node) AddNode(node *NodeInfo) {
+	n.mutex.Lock()
+	defer n.mutex.Unlock()
+	if _, ok := n.neighbors[node.ID]; !ok {
+		n.neighbors[node.ID] = node
+		log.Printf("Node %s joined the network\n", node.Name)
+	}
+}
+
+func (n *Node) FindNodes(nodeType string) []peer.ID {
+	n.mutex.RLock()
+	defer n.mutex.RUnlock()
+	nodes := make([]peer.ID, 0)
+	for _, node := range n.neighbors {
+		for _, nt := range node.Types {
+			if nt == nodeType {
+				nodes = append(nodes, node.ID)
+			}
+		}
+	}
+	return nodes
+}
+
+type StepInfo struct {
 	Name    string       `json:"name"`
-	Outputs []outputInfo `json:"outputs"`
+	Outputs []OutputInfo `json:"outputs"`
 }
-type taskInfo struct {
-	ID           string     `json:"id"`
-	JobID        string     `json:"job_id"`
-	DomainPubKey string     `json:"domain_pub_key"`
-	Name         string     `json:"name"`
-	State        string     `json:"-"`
-	Steps        []stepInfo `json:"steps"`
-}
-type taskCallback struct {
-	TaskID     string `json:"task_id"`
-	Error      error  `json:"error"`
-	ResultPath string `json:"result_path"`
-}
-type jobCallback struct {
-	JobID string `json:"job_id"`
-	Error error  `json:"error"`
-}
-type jobInfo struct {
+type JobInfo struct {
 	ID           string     `json:"id"`
 	Name         string     `json:"name"`
 	DomainPubKey string     `json:"domain_pub_key"`
 	State        string     `json:"-"`
-	Steps        []stepInfo `json:"steps"`
+	Steps        []StepInfo `json:"steps"`
 	Requester    peer.ID    `json:"requester"`
 }
-type outputInfo struct {
+type OutputInfo struct {
 	ID         peer.ID `json:"id"`
 	ProtocolID string  `json:"protocol_id"`
 }
@@ -125,34 +118,12 @@ type signedMsg struct {
 	Sig []byte `json:"sig"`
 }
 
-var nodeList = map[peer.ID]nodeInfo{}
-var taskList = map[string]taskInfo{}
-var jobList = map[string]jobInfo{}
-var portalList = map[string]portal{}
-var domainList = map[string]domain{}
-
-type domainValidator struct {
-}
-
-func (v *domainValidator) Validate(key string, value []byte) error {
-	// if !strings.HasPrefix(key, "/domain/") {
-	// 	return fmt.Errorf("invalid key: %s", key)
-	// }
-	// TODO: validate value
-	log.Println("Validating key:", key)
-	return nil
-}
-func (v *domainValidator) Select(key string, values [][]byte) (int, error) {
-	return 0, nil
-}
-
 func createDHT(ctx context.Context, host host.Host, public bool, mode dht.ModeOpt, bootstrapPeers ...peer.AddrInfo) (routing.Routing, error) {
 	var opts []dht.Option
 
 	opts = append(opts,
 		dht.Concurrency(10),
 		dht.Mode(dht.ModeServer),
-		dht.Validator(&domainValidator{}),
 		dht.BootstrapPeers(bootstrapPeers...),
 		dht.ProtocolPrefix("/posemesh"),
 	)
@@ -169,19 +140,10 @@ func createDHT(ctx context.Context, host host.Host, public bool, mode dht.ModeOp
 		return nil, err
 	}
 
-	go configureDHT(ctx, host, kademliaDHT)
-
 	return kademliaDHT, nil
 }
 
-func run() {
-	// The context governs the lifetime of the libp2p node.
-	// Cancelling it will stop the host.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	priv := InitPeerIdentity(basePath)
-
+func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(host.Host)) {
 	// connmgr, err := connmgr.NewConnManager(
 	// 	100, // Lowwater
 	// 	400, // HighWater,
@@ -190,12 +152,16 @@ func run() {
 	// if err != nil {
 	// 	panic(err)
 	// }
+	port := cfg.Port
+	if port == "" {
+		port = "0"
+	}
 	h2, err := libp2p.New(
 		// Use the keypair we generated
-		libp2p.Identity(priv),
+		libp2p.Identity(node.identity),
 		// Multiple listen addresses
 		libp2p.ListenAddrStrings(
-			"/ip4/0.0.0.0/tcp/"+cfg.Port, // regular tcp connections
+			"/ip4/0.0.0.0/tcp/"+port, // regular tcp connections
 		),
 		// support TLS connections
 		// libp2p.Security(libp2ptls.ID, libp2ptls.New),
@@ -232,7 +198,7 @@ func run() {
 	if err != nil {
 		panic(err)
 	}
-	defer h2.Close()
+	node.Host = h2
 
 	log.Printf("Peer %s at %s\n", h2.ID(), h2.Addrs())
 	ps, err := pubsub.NewGossipSub(ctx, h2)
@@ -255,156 +221,26 @@ func run() {
 	}
 
 	// publish our own node info every 10 seconds, cancel publishing when the context is done
-	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				for _, node := range cfg.NodeTypes {
-					node := nodeInfo{
-						Type: node,
-						ID:   h2.ID(),
-						Name: cfg.Name,
-					}
-					data, err := json.Marshal(node)
+	if cfg.NodeTypes[0] != "client" {
+		go func() {
+			ticker := time.NewTicker(10 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					data, err := json.Marshal(node.NodeInfo)
 					if err != nil {
 						panic(err)
 					}
 					if err := topic.Publish(ctx, data); err != nil {
 						panic(err)
 					}
+				case <-ctx.Done():
+					log.Println("Cancelled publishing")
+					return
 				}
-			case <-ctx.Done():
-				log.Println("Cancelled publishing")
-				return
 			}
-		}
-	}()
-
-	for _, node := range cfg.NodeTypes {
-		// h2.SetStreamHandler(ON_TASK_DONE_CALLBACK_PROTOCOL_ID, OnTaskDoneStreamHandler(h2))
-		if node == DATA_NODE {
-			h2.SetStreamHandler(UPLOAD_DOMAIN_DATA_PROTOCOL_ID, ReceiveDomainDataHandler(h2, func(ctx context.Context, dd *Libposemesh.DomainData) error {
-				go classifyDomainData(ctx, dd)
-				return nil
-			}))
-		}
-		if node == ADAM_NODE {
-			h2.SetStreamHandler(ADAM_PROTOCOL_ID, ReceiveVideoForPoseRefinement(h2))
-		}
-		if node == DISCOVERY_NODE {
-			h2.SetStreamHandler(DOMAIN_AUTH_PROTOCOL_ID, DomainAuthHandler)
-			portalTopic, err := ps.Join(PortalTopic)
-			if err != nil {
-				panic(err)
-			}
-			defer portalTopic.Close()
-			go PublishPortals(ctx, portalTopic, h2)
-			portalSub, err := portalTopic.Subscribe()
-			if err != nil {
-				panic(err)
-			}
-			go func() {
-				for {
-					msg, err := portalSub.Next(ctx)
-					if err != nil {
-						log.Println("Failed to read message:", err)
-						continue
-					}
-					if msg.GetFrom() != h2.ID() {
-						// pub, err := msg.GetFrom().ExtractPublicKey()
-						// if err != nil {
-						// 	log.Printf("Failed to extract public key: %s\n", err)
-						// 	continue
-						// }
-						// sMsg := signedMsg{}
-						var portal portal
-						if err := json.Unmarshal(msg.Data, &portal); err != nil {
-							log.Printf("invalid message: %s\n", msg.Data)
-							continue
-						}
-						// verified, err := pub.Verify(sMsg.Msg, sMsg.Sig)
-						// if err != nil {
-						// 	log.Printf("Failed to verify message: %s\n", err)
-						// 	continue
-						// }
-						// if verified {
-						// 	portal := portal{}
-						// 	if err := json.Unmarshal(sMsg.Msg, &portal); err != nil {
-						// 		log.Printf("Failed to unmarshal portal: %s\n", err)
-						// 		continue
-						// 	}
-						// 	log.Printf("Received portal: %s\n", portal)
-						if _, ok := portalList[portal.ShortID]; !ok {
-							portalList[portal.ShortID] = portal
-							if err := os.MkdirAll(basePath+"/portals", os.ModePerm); err != nil {
-								log.Printf("Failed to create directory: %s\n", err)
-								continue
-							}
-							f, err := os.Create(basePath + "/portals/" + portal.ShortID)
-							if err != nil {
-								log.Printf("Failed to create file: %s\n", err)
-								continue
-							}
-							defer f.Close()
-							if err := json.NewEncoder(f).Encode(portal); err != nil {
-								log.Printf("Failed to encode portal: %s\n", err)
-								continue
-							}
-						}
-						// }
-					}
-				}
-			}()
-
-			domainTopic, err := ps.Join(DomainTopic)
-			if err != nil {
-				panic(err)
-			}
-			defer domainTopic.Close()
-			go PublishDomains(ctx, domainTopic, h2)
-			domainSub, err := domainTopic.Subscribe()
-			if err != nil {
-				panic(err)
-			}
-
-			go func() {
-				for {
-					msg, err := domainSub.Next(ctx)
-					if err != nil {
-						log.Println("Failed to read message:", err)
-						continue
-					}
-					if msg.GetFrom() != h2.ID() {
-						domain := domain{}
-						if err := json.Unmarshal(msg.Data, &domain); err != nil {
-							log.Printf("invalid message: %s\n", msg.Data)
-							continue
-						}
-						domainList[domain.PublicKey] = domain
-						if err := os.MkdirAll(basePath+"/domains", os.ModePerm); err != nil {
-							log.Printf("Failed to create directory: %s\n", err)
-							continue
-						}
-						f, err := os.Create(basePath + "/domains/" + domain.PublicKey)
-						if err != nil {
-							log.Printf("Failed to create file: %s\n", err)
-							continue
-						}
-						defer f.Close()
-						if err := json.NewEncoder(f).Encode(domain); err != nil {
-							log.Printf("Failed to encode portal: %s\n", err)
-							continue
-						}
-					}
-				}
-			}()
-
-			h2.SetStreamHandler(FETCH_DOMAINS_PROTOCOL_ID, LoadDomainsStreamHandler)
-			h2.SetStreamHandler(CREATE_DOMAIN_PROTOCOL_ID, CreateDomainStreamHandler(ctx, domainTopic, h2))
-			h2.SetStreamHandler(CREATE_PORTAL_PROTOCOL_ID, CreatePortalStreamHandler(ctx, portalTopic, h2))
-		}
+		}()
 	}
 
 	// read messages from the topic, and do something based on the node type, cancel reading when the context is done
@@ -415,28 +251,18 @@ func run() {
 				log.Println("Failed to read message:", err)
 				continue
 			}
-			node := nodeInfo{}
-			if err := json.Unmarshal(msg.Data, &node); err != nil {
+			neighber := NodeInfo{}
+			if err := json.Unmarshal(msg.Data, &neighber); err != nil {
 				log.Printf("invalid message: %s\n", msg.Data)
 				continue
 			}
-			if node.ID != h2.ID() {
-				if _, ok := nodeList[node.ID]; !ok {
-					log.Printf("Node %s joined the network\n", node.Name)
-					nodeList[node.ID] = node
-					if cfg.Name == "dmt" {
-						createDMTJob(ctx, node, h2)
-						createCameraJob(ctx, node, h2, msg)
-						continue
-					}
-					if cfg.Name == "app" {
-						createCameraJob(ctx, node, h2, msg)
-						continue
-					}
-				}
+			if neighber.ID != h2.ID() {
+				node.AddNode(&neighber)
 			}
 		}
 	}()
+
+	handlers(h2)
 
 	c := make(chan os.Signal, 1)
 
@@ -446,10 +272,4 @@ func run() {
 	log.Printf("\rExiting...\n")
 
 	os.Exit(0)
-}
-
-func configureDHT(ctx context.Context, host host.Host, kademliaDHT *dht.IpfsDHT) {
-	// log.Println("Announcing ourselves...")
-	// routingDiscovery := routing.NewRoutingDiscovery(kademliaDHT)
-	// dutil.Advertise(ctx, routingDiscovery, PosemeshService)
 }

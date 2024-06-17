@@ -9,6 +9,8 @@ table AuthDomainReq {
 
 table DownloadDomainDataReq {
   domain_id:string;
+  name:string;
+  type:byte;
 }
 
 table Error {

@@ -1,7 +1,6 @@
 package test
 
 import (
-	"fmt"
 	"io"
 	"math/rand"
 	"os"
@@ -37,7 +36,6 @@ func TestDomainDataFlatbuffers(t *testing.T) {
 		Libposemesh.PartitionStart(builder)
 		Libposemesh.PartitionAddData(builder, content)
 		partition := Libposemesh.PartitionEnd(builder)
-		fmt.Printf("Sending partition data-%d-%d-%d\n", content, builder.Offset(), len(builder.Bytes))
 
 		Libposemesh.DomainDataStart(builder)
 		Libposemesh.DomainDataAddDomainId(builder, domainIDOffset)

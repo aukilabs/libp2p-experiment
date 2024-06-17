@@ -3,6 +3,7 @@ module github.com/aukilabs/go-libp2p-experiment
 go 1.21.5
 
 require (
+	github.com/go-python/gopy v0.4.10
 	github.com/google/flatbuffers v24.3.25+incompatible
 	github.com/google/uuid v1.4.0
 	github.com/libp2p/go-libp2p v0.33.2

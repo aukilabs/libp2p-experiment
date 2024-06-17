@@ -10,18 +10,21 @@ const (
 	AnyDomainDataNONE              AnyDomainData = 0
 	AnyDomainDataGenericDomainData AnyDomainData = 1
 	AnyDomainDataPartition         AnyDomainData = 2
+	AnyDomainDataPose              AnyDomainData = 3
 )
 
 var EnumNamesAnyDomainData = map[AnyDomainData]string{
 	AnyDomainDataNONE:              "NONE",
 	AnyDomainDataGenericDomainData: "GenericDomainData",
 	AnyDomainDataPartition:         "Partition",
+	AnyDomainDataPose:              "Pose",
 }
 
 var EnumValuesAnyDomainData = map[string]AnyDomainData{
 	"NONE":              AnyDomainDataNONE,
 	"GenericDomainData": AnyDomainDataGenericDomainData,
 	"Partition":         AnyDomainDataPartition,
+	"Pose":              AnyDomainDataPose,
 }
 
 func (v AnyDomainData) String() string {
