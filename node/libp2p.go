@@ -13,6 +13,7 @@ import (
 
 	"github.com/aukilabs/go-libp2p-experiment/config"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/multiformats/go-multiaddr"
 
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -36,11 +37,12 @@ type NodeInfo struct {
 type Node struct {
 	NodeInfo
 	host.Host
-	neighbors map[peer.ID]*NodeInfo
-	jobList   map[string]JobInfo
-	mutex     sync.RWMutex
-	BasePath  string
-	identity  crypto.PrivKey
+	kademliaDHT routing.Routing
+	neighbors   map[peer.ID]*NodeInfo
+	jobList     map[string]JobInfo
+	mutex       sync.RWMutex
+	BasePath    string
+	identity    crypto.PrivKey
 }
 
 func NewNode(info NodeInfo, basePath string) (node *Node, err error) {
@@ -82,6 +84,16 @@ func (n *Node) FindNodes(nodeType string) []peer.ID {
 		}
 	}
 	return nodes
+}
+
+func (n *Node) FindPeerAddresses(ctx context.Context, id peer.ID) ([]multiaddr.Multiaddr, error) {
+	peer, err := n.kademliaDHT.FindPeer(ctx, id)
+	if err != nil {
+		log.Printf("Failed to find peer: %s\n", err)
+		return nil, err
+	}
+	log.Printf("Found peer: %s\n", peer)
+	return peer.Addrs, nil
 }
 
 type StepInfo struct {

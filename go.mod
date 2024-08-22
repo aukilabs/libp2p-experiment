@@ -3,12 +3,12 @@ module github.com/aukilabs/go-libp2p-experiment
 go 1.21.5
 
 require (
-	github.com/go-python/gopy v0.4.10
 	github.com/google/flatbuffers v24.3.25+incompatible
 	github.com/google/uuid v1.4.0
 	github.com/libp2p/go-libp2p v0.33.2
 	github.com/libp2p/go-libp2p-kad-dht v0.25.2
 	github.com/libp2p/go-libp2p-pubsub v0.10.1
+	github.com/multiformats/go-multiaddr v0.12.3
 	github.com/stretchr/testify v1.8.4
 )
 
@@ -72,7 +72,6 @@ require (
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/multiformats/go-base32 v0.1.0 // indirect
 	github.com/multiformats/go-base36 v0.2.0 // indirect
-	github.com/multiformats/go-multiaddr v0.12.3 // indirect
 	github.com/multiformats/go-multiaddr-dns v0.3.1 // indirect
 	github.com/multiformats/go-multiaddr-fmt v0.1.0 // indirect
 	github.com/multiformats/go-multibase v0.2.0 // indirect

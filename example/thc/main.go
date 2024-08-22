@@ -11,7 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 )
 
-var CameraAppCfg = config.Config{
+var RecorderCfg = config.Config{
 	NodeTypes:      []string{"client"},
 	Name:           "thc",
 	Port:           "",
@@ -29,14 +29,21 @@ func main() {
 	defer cancel()
 	info := node.NodeInfo{
 		Name:  *name,
-		Types: CameraAppCfg.NodeTypes,
+		Types: RecorderCfg.NodeTypes,
 	}
-	CameraAppCfg.Name = *name
+	RecorderCfg.Name = *name
 	n, err := node.NewNode(info, "volume")
 	if err != nil {
 		log.Fatalf("Failed to create node: %s\n", err)
 	}
-	n.Start(ctx, &CameraAppCfg, func(h host.Host) {
-
+	n.Start(ctx, &RecorderCfg, func(h host.Host) {
+		salviaNodes := n.FindNodes(config.SALVIA_NODE)
+		for _, p := range salviaNodes {
+			addrs, err := n.FindPeerAddresses(ctx, p)
+			if err != nil {
+				log.Printf("Failed to get peer addresses: %s\n", err)
+				continue
+			}
+		}
 	})
 }
