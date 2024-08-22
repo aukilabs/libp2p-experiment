@@ -17,4 +17,4 @@ type Config struct {
 	OwnerWallet      string      `cli:"owner-wallet" usage:"The wallet of the owner" dft:""`
 }
 
-var DefaultBootstrapNodes = []string{"/ip4/127.0.0.1/tcp/18804/p2p/12D3KooWJ86dj5s4AQRcNRhG3hqWioSsN3uGR55LVY7nx3eSttik", "/ip4/127.0.0.1/tcp/18805/p2p/12D3KooWLQUrSJJ8PvZ3iWT5mw14qiiuux8eV6irZMZZNDc368xk"}
+var DefaultBootstrapNodes = []string{"/ip4/127.0.0.1/tcp/18804/p2p/12D3KooWLarz8bTotktq3UXPxWGxtbWUb9SRxeCTnWppAMt9eXkr", "/ip4/127.0.0.1/tcp/18805/p2p/12D3KooWLQUrSJJ8PvZ3iWT5mw14qiiuux8eV6irZMZZNDc368xk"}

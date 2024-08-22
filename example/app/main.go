@@ -242,6 +242,84 @@ func (v *visual) Print() {
 	}
 }
 
+func findDomainDataNode(ctx context.Context, h host.Host, dds peer.ID, domainID string, permission string) ([]peer.ID, error) {
+	s, err := h.NewStream(ctx, dds, node.FIND_DOMAIN_PROTOCOL_ID)
+	if err != nil {
+		return nil, err
+	}
+	errCh := make(chan error)
+	peerCh := make(chan []peer.ID)
+	go func() {
+		sizebuf := make([]byte, 4)
+		if _, err := s.Read(sizebuf); err != nil {
+			log.Println(err)
+			errCh <- err
+			return
+		}
+		size := flatbuffers.GetSizePrefix(sizebuf, 0)
+		buf := make([]byte, size)
+		if _, err := s.Read(buf); err != nil {
+			log.Println(err)
+			errCh <- err
+			return
+		}
+		domain := Libposemesh.GetRootAsDomain(buf, 0)
+		if domain.ReadersLength() == 0 {
+			log.Println("No readers found")
+			errCh <- fmt.Errorf("no readers found")
+			return
+		}
+		res := make([]peer.ID, 0)
+		if permission == "read" {
+			for i := 0; i < domain.ReadersLength(); i++ {
+				reader := domain.Readers(i)
+				peerID, err := peer.Decode(string(reader))
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+				if peerID == h.ID() {
+					log.Println("can't download data from self")
+					continue
+				}
+				res = append(res, peerID)
+			}
+		} else {
+			writer := domain.Writer()
+			peerID, err := peer.Decode(string(writer))
+			if err != nil {
+				log.Println(err)
+				errCh <- err
+				return
+			}
+			if peerID == h.ID() {
+				log.Println("can't download data from self")
+				errCh <- fmt.Errorf("can't download data from self")
+				return
+			}
+			res = append(res, peerID)
+		}
+		peerCh <- res
+	}()
+
+	builder := flatbuffers.NewBuilder(0)
+	domainIDOffset := builder.CreateString(domainID)
+	Libposemesh.DownloadDomainDataReqStart(builder)
+	Libposemesh.DownloadDomainDataReqAddDomainId(builder, domainIDOffset)
+	req := Libposemesh.DownloadDomainDataReqEnd(builder)
+	builder.FinishSizePrefixed(req)
+	if _, err := s.Write(builder.FinishedBytes()); err != nil {
+		return nil, err
+	}
+
+	select {
+	case err := <-errCh:
+		return nil, err
+	case res := <-peerCh:
+		return res, nil
+	}
+}
+
 func downloadDomainData(ctx context.Context, h host.Host, dds peer.ID, domainID, basePath string) error {
 	log.Println("Downloading domain data from ", dds.String())
 	s, err := h.NewStream(ctx, dds, node.DOWNLOAD_DOMAIN_DATA_PROTOCOL_ID)
@@ -250,6 +328,8 @@ func downloadDomainData(ctx context.Context, h host.Host, dds peer.ID, domainID,
 	}
 	v.Print()
 	go func() {
+		defer s.Close()
+
 		if err := utils.ReceiveDomainData(ctx, s, basePath, func(ctx context.Context, s string, dd *Libposemesh.DomainData) error {
 			index, _ := strconv.ParseInt(string(dd.Name()), 10, 64)
 			partition, err := utils.GetPartition(dd)
@@ -311,10 +391,13 @@ func createDomain(ctx context.Context, n *node.Node, domainService peer.ID) erro
 	domainName := builder.CreateString("domain")
 	writer := builder.CreateString(dataNodes[0].String())
 
+	readerStrs := make([]flatbuffers.UOffsetT, len(dataNodes))
+	for i, reader := range dataNodes {
+		readerStrs[i] = builder.CreateString(reader.String())
+	}
 	Libposemesh.DomainStartReadersVector(builder, len(dataNodes))
-	for _, reader := range dataNodes {
-		r := builder.CreateString(reader.String())
-		builder.PrependUOffsetT(r)
+	for i := len(dataNodes) - 1; i >= 0; i-- {
+		builder.PrependUOffsetT(readerStrs[i])
 	}
 	readers := builder.EndVector(len(dataNodes))
 
@@ -335,8 +418,9 @@ func createDomain(ctx context.Context, n *node.Node, domainService peer.ID) erro
 
 	s, err := n.Host.NewStream(ctx, domainService, node.CREATE_DOMAIN_PROTOCOL_ID)
 	if _, err := s.Write(builder.FinishedBytes()); err != nil {
-		log.Println(err)
+		return err
 	}
+	log.Println("Domain created", key.String())
 	defer s.Close()
 	return nil
 }
@@ -376,9 +460,6 @@ func main() {
 	if name == nil || *name == "" {
 		log.Fatal("name is required")
 	}
-	if domainId == nil || *domainId == "" {
-		log.Fatal("domainId is required")
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	info := node.NodeInfo{
@@ -391,49 +472,70 @@ func main() {
 		log.Fatalf("Failed to create node: %s\n", err)
 	}
 	n.Start(ctx, &CameraAppCfg, func(h host.Host) {
-		var dataNodes []peer.ID
-		for len(dataNodes) == 0 {
-			dataNodes = n.FindNodes(config.DISCOVERY_NODE)
-			if len(dataNodes) == 0 {
+		var discoveryNodes []peer.ID
+		for len(discoveryNodes) == 0 {
+			discoveryNodes = n.FindNodes(config.DISCOVERY_NODE)
+			if len(discoveryNodes) == 0 {
 				time.Sleep(2 * time.Second)
 			}
 		}
-		if mode == nil || *mode != "receiver" {
-			go func() {
-				log.Println("sending domain data", len(dataNodes))
-				for i := 0; i < len(dataNodes); i++ {
-					if err := sendDomainData(ctx, h, &node.JobInfo{
-						DomainPubKey: *domainId,
-					}, []node.OutputInfo{{
-						ID:         dataNodes[i],
-						ProtocolID: node.UPLOAD_DOMAIN_DATA_PROTOCOL_ID,
-					}}); err != nil {
+		if *domainId != "" {
+			if mode == nil || *mode != "receiver" {
+				var dataNodes []peer.ID
+				for i := 0; i < len(discoveryNodes); i++ {
+					dataNodes, err = findDomainDataNode(ctx, h, discoveryNodes[0], *domainId, "write")
+					if err != nil {
 						log.Println(err)
-						continue
+					} else {
+						break
 					}
 				}
-			}()
-		}
-		if mode == nil || *mode != "sender" {
-			go func() {
-				log.Println("downloading domain data")
-				for i := 0; i < len(dataNodes); i++ {
-					if err := downloadDomainData(ctx, h, dataNodes[i], *domainId, n.BasePath); err != nil {
+				go func() {
+					log.Println("sending domain data", len(dataNodes))
+					for i := 0; i < len(dataNodes); i++ {
+						if err := sendDomainData(ctx, h, &node.JobInfo{
+							DomainPubKey: *domainId,
+						}, []node.OutputInfo{{
+							ID:         dataNodes[i],
+							ProtocolID: node.UPLOAD_DOMAIN_DATA_PROTOCOL_ID,
+						}}); err != nil {
+							log.Println(err)
+							continue
+						}
+					}
+				}()
+			}
+			if mode == nil || *mode != "sender" {
+				var dataNodes []peer.ID
+				for i := 0; i < len(discoveryNodes); i++ {
+					dataNodes, err = findDomainDataNode(ctx, h, discoveryNodes[0], *domainId, "read")
+					if err != nil {
 						log.Println(err)
-						continue
+					} else {
+						break
 					}
 				}
-			}()
+				go func() {
+					log.Println("downloading domain data")
+					for i := 0; i < len(dataNodes); i++ {
+						if err := downloadDomainData(ctx, h, dataNodes[i], *domainId, n.BasePath); err != nil {
+							log.Println(err)
+							continue
+						}
+					}
+				}()
+			}
 		}
 		if shouldCreateDomain != nil && *shouldCreateDomain {
 			go func() {
 				log.Println("creating domain and portal")
-				for i := 0; i < len(dataNodes); i++ {
-					if err := createDomain(ctx, n, dataNodes[i]); err != nil {
+				for i := 0; i < len(discoveryNodes); i++ {
+					if err := createDomain(ctx, n, discoveryNodes[i]); err != nil {
 						continue
-					}
-					if err := createPortal(ctx, h, dataNodes[i]); err != nil {
+					} else if err := createPortal(ctx, h, discoveryNodes[i]); err != nil {
 						continue
+					} else {
+						break
 					}
 				}
 			}()
