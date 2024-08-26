@@ -7,6 +7,7 @@ const DATA_NODE = "DATA"
 const BOOSTRAP_NODE = "BOOTSTRAP"
 const DISCOVERY_NODE = "DOMAIN_SERVICE"
 const SALVIA_NODE = "SALVIA"
+const VISION_NODE = "VISION"
 
 type Config struct {
 	NodeTypes        []string    `cli:"node-types" usage:"The type of node to run" dft:"adam,domaindata"`

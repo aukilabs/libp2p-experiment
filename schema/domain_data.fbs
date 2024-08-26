@@ -11,7 +11,7 @@ table Partition {
 }
 
 table Portal {
-  name:string;
+  default_name:string;
   size:float;
   short_id:string;
 }

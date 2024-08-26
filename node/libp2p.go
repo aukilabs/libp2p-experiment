@@ -25,8 +25,6 @@ import (
 
 const PosemeshService = "posemesh"
 const NodeInfoTopic = "posemesh_nodes"
-const PortalTopic = "portals"
-const DomainTopic = "domains"
 
 type NodeInfo struct {
 	Types []string `json:"node_types"`
@@ -43,6 +41,7 @@ type Node struct {
 	mutex       sync.RWMutex
 	BasePath    string
 	identity    crypto.PrivKey
+	PubSub      *pubsub.PubSub
 }
 
 func NewNode(info NodeInfo, basePath string) (node *Node, err error) {
@@ -217,6 +216,7 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 	if err != nil {
 		panic(err)
 	}
+	node.PubSub = ps
 
 	// if err := setupMDNS(h2); err != nil {
 	// 	panic(err)

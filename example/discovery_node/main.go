@@ -4,12 +4,14 @@ import (
 	"context"
 	"flag"
 	"log"
+	"os"
 
 	"github.com/aukilabs/go-libp2p-experiment/Libposemesh"
 	"github.com/aukilabs/go-libp2p-experiment/config"
 	"github.com/aukilabs/go-libp2p-experiment/node"
 	flatbuffers "github.com/google/flatbuffers/go"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 )
@@ -25,38 +27,48 @@ var DiscoveryNodeCfg = config.Config{
 var domainList = map[string]*Libposemesh.Domain{}
 var portalList = map[string]*Libposemesh.Portal{}
 
-func createPortalStreamHandler(s network.Stream) {
-	sizebuf := make([]byte, 4)
-	if _, err := s.Read(sizebuf); err != nil {
-		log.Println(err)
-		return
+func createPortalStreamHandler(portalTopic *pubsub.Topic) func(s network.Stream) {
+	return func(s network.Stream) {
+		sizebuf := make([]byte, 4)
+		if _, err := s.Read(sizebuf); err != nil {
+			log.Println(err)
+			return
+		}
+		size := flatbuffers.GetSizePrefix(sizebuf, 0)
+		buf := make([]byte, size)
+		if _, err := s.Read(buf); err != nil {
+			log.Println(err)
+			return
+		}
+		portal := Libposemesh.GetRootAsPortal(buf, 0)
+		portalList[string(portal.ShortId())] = portal
+		if err := publishPortal(context.Background(), portalTopic, portal); err != nil {
+			log.Printf("Failed to publish portal %s: %s\n", portal.ShortId(), err)
+		}
+		log.Printf("Portal %s created\n", portal.ShortId())
 	}
-	size := flatbuffers.GetSizePrefix(sizebuf, 0)
-	buf := make([]byte, size)
-	if _, err := s.Read(buf); err != nil {
-		log.Println(err)
-		return
-	}
-	portal := Libposemesh.GetRootAsPortal(buf, 0)
-	portalList[string(portal.ShortId())] = portal
-	log.Printf("Portal %s created\n", portal.ShortId())
 }
 
-func createDomainStreamHandler(s network.Stream) {
-	sizebuf := make([]byte, 4)
-	if _, err := s.Read(sizebuf); err != nil {
-		log.Println(err)
-		return
+func createDomainStreamHandler(domainTopic *pubsub.Topic) func(s network.Stream) {
+	return func(s network.Stream) {
+		sizebuf := make([]byte, 4)
+		if _, err := s.Read(sizebuf); err != nil {
+			log.Println(err)
+			return
+		}
+		size := flatbuffers.GetSizePrefix(sizebuf, 0)
+		buf := make([]byte, size)
+		if _, err := s.Read(buf); err != nil {
+			log.Println(err)
+			return
+		}
+		domain := Libposemesh.GetRootAsDomain(buf, 0)
+		domainList[string(domain.Id())] = domain
+		if err := publishDomain(context.Background(), domainTopic, domain); err != nil {
+			log.Printf("Failed to publish domain %s: %s\n", domain.Id(), err)
+		}
+		log.Printf("Domain %s created\n", domain.Id())
 	}
-	size := flatbuffers.GetSizePrefix(sizebuf, 0)
-	buf := make([]byte, size)
-	if _, err := s.Read(buf); err != nil {
-		log.Println(err)
-		return
-	}
-	domain := Libposemesh.GetRootAsDomain(buf, 0)
-	domainList[string(domain.Id())] = domain
-	log.Printf("Domain %s created\n", domain.Id())
 }
 
 func main() {
@@ -77,8 +89,12 @@ func main() {
 		log.Fatalf("Failed to create node: %s\n", err)
 	}
 	n.Start(ctx, &DiscoveryNodeCfg, func(h host.Host) {
-		h.SetStreamHandler(node.CREATE_DOMAIN_PROTOCOL_ID, createDomainStreamHandler)
-		h.SetStreamHandler(node.CREATE_PORTAL_PROTOCOL_ID, createPortalStreamHandler)
+		portalTopic, domainTopic, err := SyncDomainsAndPortals(ctx, h, n.BasePath, n.PubSub)
+		if err != nil {
+			log.Fatalf("Failed to sync domains and portals: %s\n", err)
+		}
+		h.SetStreamHandler(node.CREATE_DOMAIN_PROTOCOL_ID, createDomainStreamHandler(domainTopic))
+		h.SetStreamHandler(node.CREATE_PORTAL_PROTOCOL_ID, createPortalStreamHandler(portalTopic))
 		h.SetStreamHandler(node.FIND_DOMAIN_PROTOCOL_ID, func(s network.Stream) {
 			defer s.Close()
 			sizeBuf := make([]byte, 4)
@@ -133,112 +149,144 @@ func main() {
 	})
 }
 
-// portalTopic, err := ps.Join(PortalTopic)
-// 		if err != nil {
-// 			panic(err)
-// 		}
-// 		defer portalTopic.Close()
-// 		go PublishPortals(ctx, portalTopic, h2)
-// 		portalSub, err := portalTopic.Subscribe()
-// 		if err != nil {
-// 			panic(err)
-// 		}
-// go func() {
-// 	for {
-// 		msg, err := portalSub.Next(ctx)
-// 		if err != nil {
-// 			log.Println("Failed to read message:", err)
-// 			continue
-// 		}
-// 		if msg.GetFrom() != h2.ID() {
-// 			// pub, err := msg.GetFrom().ExtractPublicKey()
-// 			// if err != nil {
-// 			// 	log.Printf("Failed to extract public key: %s\n", err)
-// 			// 	continue
-// 			// }
-// 			// sMsg := signedMsg{}
-// 			var portal portal
-// 			if err := json.Unmarshal(msg.Data, &portal); err != nil {
-// 				log.Printf("invalid message: %s\n", msg.Data)
-// 				continue
-// 			}
-// 			// verified, err := pub.Verify(sMsg.Msg, sMsg.Sig)
-// 			// if err != nil {
-// 			// 	log.Printf("Failed to verify message: %s\n", err)
-// 			// 	continue
-// 			// }
-// 			// if verified {
-// 			// 	portal := portal{}
-// 			// 	if err := json.Unmarshal(sMsg.Msg, &portal); err != nil {
-// 			// 		log.Printf("Failed to unmarshal portal: %s\n", err)
-// 			// 		continue
-// 			// 	}
-// 			// 	log.Printf("Received portal: %s\n", portal)
-// 			if _, ok := portalList[portal.ShortID]; !ok {
-// 				portalList[portal.ShortID] = portal
-// 				if err := os.MkdirAll(basePath+"/portals", os.ModePerm); err != nil {
-// 					log.Printf("Failed to create directory: %s\n", err)
-// 					continue
-// 				}
-// 				f, err := os.Create(basePath + "/portals/" + portal.ShortID)
-// 				if err != nil {
-// 					log.Printf("Failed to create file: %s\n", err)
-// 					continue
-// 				}
-// 				defer f.Close()
-// 				if err := json.NewEncoder(f).Encode(portal); err != nil {
-// 					log.Printf("Failed to encode portal: %s\n", err)
-// 					continue
-// 				}
-// 			}
-// 			// }
-// 		}
-// 	}
-// }()
+const PortalTopic = "portals"
+const DomainTopic = "domains"
 
-// domainTopic, err := ps.Join(DomainTopic)
-// if err != nil {
-// 	panic(err)
-// }
-// defer domainTopic.Close()
-// go PublishDomains(ctx, domainTopic, h2)
-// domainSub, err := domainTopic.Subscribe()
-// if err != nil {
-// 	panic(err)
-// }
+func publishPortal(ctx context.Context, portalTopic *pubsub.Topic, portal *Libposemesh.Portal) error {
+	builder := flatbuffers.NewBuilder(0)
+	defaultName := builder.CreateByteString(portal.DefaultName())
+	shortId := builder.CreateByteString(portal.ShortId())
 
-// go func() {
-// 	for {
-// 		msg, err := domainSub.Next(ctx)
-// 		if err != nil {
-// 			log.Println("Failed to read message:", err)
-// 			continue
-// 		}
-// 		if msg.GetFrom() != h2.ID() {
-// 			domain := domain{}
-// 			if err := json.Unmarshal(msg.Data, &domain); err != nil {
-// 				log.Printf("invalid message: %s\n", msg.Data)
-// 				continue
-// 			}
-// 			domainList[domain.PublicKey] = domain
-// 			if err := os.MkdirAll(basePath+"/domains", os.ModePerm); err != nil {
-// 				log.Printf("Failed to create directory: %s\n", err)
-// 				continue
-// 			}
-// 			f, err := os.Create(basePath + "/domains/" + domain.PublicKey)
-// 			if err != nil {
-// 				log.Printf("Failed to create file: %s\n", err)
-// 				continue
-// 			}
-// 			defer f.Close()
-// 			if err := json.NewEncoder(f).Encode(domain); err != nil {
-// 				log.Printf("Failed to encode portal: %s\n", err)
-// 				continue
-// 			}
-// 		}
-// 	}
-// }()
+	Libposemesh.PortalStart(builder)
+	Libposemesh.PortalAddShortId(builder, shortId)
+	Libposemesh.PortalAddDefaultName(builder, defaultName)
+	p := Libposemesh.PortalEnd(builder)
+	builder.FinishSizePrefixed(p)
 
-// h2.SetStreamHandler(protocol.FETCH_DOMAINS_PROTOCOL_ID, LoadDomainsStreamHandler)
-// h2.SetStreamHandler(protocol.CREATE_DOMAIN_PROTOCOL_ID, CreateDomainStreamHandler(ctx, domainTopic, h2))
-// h2.SetStreamHandler(protocol.CREATE_PORTAL_PROTOCOL_ID, CreatePortalStreamHandler(ctx, portalTopic, h2))
+	return portalTopic.Publish(ctx, builder.FinishedBytes())
+}
+
+func publishPortals(ctx context.Context, portalTopic *pubsub.Topic) {
+	for _, portal := range portalList {
+		if err := publishPortal(ctx, portalTopic, portal); err != nil {
+			log.Printf("Failed to publish portal %s: %s\n", portal.ShortId(), err)
+		}
+	}
+}
+
+func publishDomain(ctx context.Context, domainTopic *pubsub.Topic, domain *Libposemesh.Domain) error {
+	builder := flatbuffers.NewBuilder(0)
+	domainId := builder.CreateByteString(domain.Id())
+	domainName := builder.CreateByteString(domain.Name())
+	writer := builder.CreateByteString(domain.Writer())
+
+	readerStrs := make([]flatbuffers.UOffsetT, domain.ReadersLength())
+	for i := 0; i < domain.ReadersLength(); i++ {
+		readerStrs[i] = builder.CreateByteString(domain.Readers(i))
+	}
+	Libposemesh.DomainStartReadersVector(builder, domain.ReadersLength())
+	for i := domain.ReadersLength() - 1; i >= 0; i-- {
+		builder.PrependUOffsetT(readerStrs[i])
+	}
+	readers := builder.EndVector(domain.ReadersLength())
+
+	Libposemesh.DomainStart(builder)
+	Libposemesh.DomainAddId(builder, domainId)
+	Libposemesh.DomainAddName(builder, domainName)
+	Libposemesh.DomainAddWriter(builder, writer)
+	Libposemesh.DomainAddReaders(builder, readers)
+	d := Libposemesh.DomainEnd(builder)
+	builder.FinishSizePrefixed(d)
+
+	return domainTopic.Publish(ctx, builder.FinishedBytes())
+}
+
+func publishDomains(ctx context.Context, domainTopic *pubsub.Topic) {
+	for _, domain := range domainList {
+		if err := publishDomain(ctx, domainTopic, domain); err != nil {
+			log.Printf("Failed to publish domain %s: %s\n", domain.Id(), err)
+		}
+	}
+}
+
+func receivePortals(ctx context.Context, portalSub *pubsub.Subscription, h host.Host, basePath string) {
+	for {
+		msg, err := portalSub.Next(ctx)
+		if err != nil {
+			log.Println("Failed to read message:", err)
+			continue
+		}
+		if msg.GetFrom() != h.ID() {
+			portal := Libposemesh.GetSizePrefixedRootAsPortal(msg.Data, 0)
+			portalId := string(portal.ShortId())
+			if _, ok := portalList[portalId]; !ok {
+				portalList[portalId] = portal
+				if err := os.MkdirAll(basePath+"/portals", os.ModePerm); err != nil {
+					log.Printf("Failed to create directory: %s\n", err)
+					continue
+				}
+				f, err := os.Create(basePath + "/portals/" + portalId)
+				if err != nil {
+					log.Printf("Failed to create file: %s\n", err)
+					continue
+				}
+				defer f.Close()
+				f.Write(msg.Data)
+			}
+		}
+	}
+}
+
+func receiveDomains(ctx context.Context, domainSub *pubsub.Subscription, h host.Host, basePath string) {
+	for {
+		msg, err := domainSub.Next(ctx)
+		if err != nil {
+			log.Println("Failed to read message:", err)
+			continue
+		}
+		if msg.GetFrom() != h.ID() {
+			domain := Libposemesh.GetSizePrefixedRootAsDomain(msg.Data, 0)
+			domainId := string(domain.Id())
+			domainList[domainId] = domain
+			if err := os.MkdirAll(basePath+"/domains", os.ModePerm); err != nil {
+				log.Printf("Failed to create directory: %s\n", err)
+				continue
+			}
+			f, err := os.Create(basePath + "/domains/" + domainId)
+			if err != nil {
+				log.Printf("Failed to create file: %s\n", err)
+				continue
+			}
+			defer f.Close()
+			f.Write(msg.Data)
+		}
+	}
+}
+
+func SyncDomainsAndPortals(ctx context.Context, h host.Host, basePath string, ps *pubsub.PubSub) (*pubsub.Topic, *pubsub.Topic, error) {
+	portalTopic, err := ps.Join(PortalTopic)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer portalTopic.Close()
+	go publishPortals(ctx, portalTopic)
+	portalSub, err := portalTopic.Subscribe()
+	if err != nil {
+		return nil, nil, err
+	}
+	go receivePortals(ctx, portalSub, h, basePath)
+
+	domainTopic, err := ps.Join(DomainTopic)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer domainTopic.Close()
+	go publishDomains(ctx, domainTopic)
+	domainSub, err := domainTopic.Subscribe()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	go receiveDomains(ctx, domainSub, h, basePath)
+	return portalTopic, domainTopic, nil
+}

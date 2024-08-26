@@ -41,7 +41,7 @@ func (rcv *Portal) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *Portal) Name() []byte {
+func (rcv *Portal) DefaultName() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -72,8 +72,8 @@ func (rcv *Portal) ShortId() []byte {
 func PortalStart(builder *flatbuffers.Builder) {
 	builder.StartObject(3)
 }
-func PortalAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
+func PortalAddDefaultName(builder *flatbuffers.Builder, defaultName flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(defaultName), 0)
 }
 func PortalAddSize(builder *flatbuffers.Builder, size float32) {
 	builder.PrependFloat32Slot(1, size, 0.0)
