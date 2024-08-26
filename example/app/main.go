@@ -432,7 +432,7 @@ func createPortal(ctx context.Context, h host.Host, domainService peer.ID) error
 	portalShortId := builder.CreateString(id)
 	name := builder.CreateString("portal")
 	Libposemesh.PortalStart(builder)
-	Libposemesh.PortalAddName(builder, name)
+	Libposemesh.PortalAddDefaultName(builder, name)
 	Libposemesh.PortalAddShortId(builder, portalShortId)
 	Libposemesh.PortalAddSize(builder, 5)
 	portalOffset := Libposemesh.PortalEnd(builder)

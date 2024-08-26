@@ -159,6 +159,7 @@ func publishPortal(ctx context.Context, portalTopic *pubsub.Topic, portal *Libpo
 
 	Libposemesh.PortalStart(builder)
 	Libposemesh.PortalAddShortId(builder, shortId)
+	Libposemesh.PortalAddSize(builder, portal.Size())
 	Libposemesh.PortalAddDefaultName(builder, defaultName)
 	p := Libposemesh.PortalEnd(builder)
 	builder.FinishSizePrefixed(p)
