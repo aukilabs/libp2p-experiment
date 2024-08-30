@@ -111,6 +111,11 @@ func createDomainStreamHandler(domainTopic *pubsub.Topic) func(s network.Stream)
 func main() {
 	var name = flag.String("name", "discovery 1", "discovery service name")
 	port := flag.String("port", "18804", "port")
+	bootstrapNodes := flag.String("bootstrap-nodes", "", "bootstrap nodes, separated by comma")
+	bootstrapNodesList := []string{}
+	if bootstrapNodes != nil && *bootstrapNodes != "" {
+		bootstrapNodesList = append(bootstrapNodesList, *bootstrapNodes)
+	}
 	flag.Parse()
 	if name == nil || *name == "" {
 		log.Fatal("name is required")
@@ -123,6 +128,7 @@ func main() {
 	}
 	DiscoveryNodeCfg.Name = *name
 	DiscoveryNodeCfg.Port = *port
+	DiscoveryNodeCfg.BootstrapPeers = bootstrapNodesList
 	n, err := node.NewNode(info, "volume")
 	if err != nil {
 		log.Fatalf("Failed to create node: %s\n", err)

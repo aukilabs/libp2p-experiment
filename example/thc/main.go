@@ -63,6 +63,11 @@ func main() {
 	cactusBackendUser := flag.String("cactus-user", "", "Cactus backend user")
 	cactusBackendPassword := flag.String("cactus-password", "", "Cactus backend password")
 	domainID := flag.String("domain", "", "Domain ID")
+	bootstrapNodes := flag.String("bootstrap-nodes", "", "bootstrap nodes, separated by comma")
+	bootstrapNodesList := []string{}
+	if bootstrapNodes != nil && *bootstrapNodes != "" {
+		bootstrapNodesList = append(bootstrapNodesList, *bootstrapNodes)
+	}
 	flag.Parse()
 	if name == nil || *name == "" {
 		log.Fatal("name is required")

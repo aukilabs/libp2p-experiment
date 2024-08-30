@@ -10,6 +10,10 @@ const NodeTable = () => {
           const enc = new TextDecoder("utf-8");
           const newNode = JSON.parse(enc.decode(message.detail.data))
           console.log('Received new node:', newNode)
+          if (newNode.node_types[0] == "DOMAIN_SERVICE") {
+            console.log('Received new domain service:', newNode)
+            return
+          }
           setNodes((prevNodes) => {
               const newNodes = new Map(prevNodes)
               newNodes.set(newNode.id, newNode)

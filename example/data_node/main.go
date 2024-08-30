@@ -33,6 +33,11 @@ var portalList = map[string]*Libposemesh.Portal{}
 
 func main() {
 	var name = flag.String("name", "data_node_1", "app name")
+	bootstrapNodes := flag.String("bootstrap-nodes", "", "bootstrap nodes, separated by comma")
+	bootstrapNodesList := []string{}
+	if bootstrapNodes != nil && *bootstrapNodes != "" {
+		bootstrapNodesList = append(bootstrapNodesList, *bootstrapNodes)
+	}
 	flag.Parse()
 	if name == nil || *name == "" {
 		log.Fatal("name is required")
@@ -44,6 +49,7 @@ func main() {
 		Types: DataNodeConfig.NodeTypes,
 	}
 	DataNodeConfig.Name = *name
+	DataNodeConfig.BootstrapPeers = bootstrapNodesList
 	n, err := node.NewNode(info, "volume")
 	if err != nil {
 		log.Fatalf("Failed to create node: %s\n", err)
