@@ -1,7 +1,26 @@
 include "domain_data.fbs";
 namespace Libposemesh;
 
-union AnyMsg { AuthDomainReq, DownloadDomainDataReq, UploadDomainDataReq, Error, DownloadDomainDataResp }
+union AnyMsg { AuthDomainReq, DownloadDomainDataReq, UploadDomainDataReq, Error, DownloadDomainDataResp, Image, Job }
+
+table Image {
+  timestamp:int64;
+  frame:[byte];
+}
+
+table Peer {
+  id:string;
+  addr:string;
+  handler:string;
+}
+
+table Job {
+  id:string;
+  name:string;
+  input:Peer;
+  output:[Peer];
+  steps:[Job];
+}
 
 table AuthDomainReq {
   domain_id:string;

@@ -5,4 +5,6 @@ table Domain {
   name:string;
   writer:string;
   readers:[string];
+  nodes:[string]; // peer ids in this domain cluster
+  cluster_secret:string;
 }

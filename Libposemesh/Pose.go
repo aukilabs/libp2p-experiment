@@ -113,7 +113,7 @@ func (rcv *Pose) MutateRz(n float32) bool {
 	return rcv._tab.MutateFloat32Slot(14, n)
 }
 
-func (rcv *Pose) Size() float32 {
+func (rcv *Pose) Rw() float32 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
 		return rcv._tab.GetFloat32(o + rcv._tab.Pos)
@@ -121,7 +121,7 @@ func (rcv *Pose) Size() float32 {
 	return 0.0
 }
 
-func (rcv *Pose) MutateSize(n float32) bool {
+func (rcv *Pose) MutateRw(n float32) bool {
 	return rcv._tab.MutateFloat32Slot(16, n)
 }
 
@@ -154,8 +154,8 @@ func PoseAddRy(builder *flatbuffers.Builder, ry float32) {
 func PoseAddRz(builder *flatbuffers.Builder, rz float32) {
 	builder.PrependFloat32Slot(5, rz, 0.0)
 }
-func PoseAddSize(builder *flatbuffers.Builder, size float32) {
-	builder.PrependFloat32Slot(6, size, 0.0)
+func PoseAddRw(builder *flatbuffers.Builder, rw float32) {
+	builder.PrependFloat32Slot(6, rw, 0.0)
 }
 func PoseAddShortId(builder *flatbuffers.Builder, shortId flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(shortId), 0)

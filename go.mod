@@ -10,6 +10,7 @@ require (
 	github.com/libp2p/go-libp2p-pubsub v0.10.1
 	github.com/multiformats/go-multiaddr v0.12.3
 	github.com/stretchr/testify v1.8.4
+	gocv.io/x/gocv v0.37.0
 )
 
 require (

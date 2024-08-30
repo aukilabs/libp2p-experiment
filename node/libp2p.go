@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -21,6 +22,10 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
+	quicTransport "github.com/libp2p/go-libp2p/p2p/transport/quic"
+	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
+	ws "github.com/libp2p/go-libp2p/p2p/transport/websocket"
+	webtransport "github.com/libp2p/go-libp2p/p2p/transport/webtransport"
 )
 
 const PosemeshService = "posemesh"
@@ -111,23 +116,6 @@ type OutputInfo struct {
 	ID         peer.ID `json:"id"`
 	ProtocolID string  `json:"protocol_id"`
 }
-type portal struct {
-	CreatedBy   peer.ID `json:"created_by"`
-	ShortID     string  `json:"short_id"`
-	Size        float32 `json:"size"`
-	DefaultName string  `json:"default_name"`
-	Hash        string  `json:"hash"`
-}
-type domain struct {
-	PublicKey   string `json:"public_key"`
-	OwnerWallet string `json:"owner_wallet"`
-	Name        string `json:"name"`
-	DataNodes   []peer.ID
-}
-type signedMsg struct {
-	Msg []byte `json:"msg"`
-	Sig []byte `json:"sig"`
-}
 
 func createDHT(ctx context.Context, host host.Host, public bool, mode dht.ModeOpt, bootstrapPeers ...peer.AddrInfo) (routing.Routing, error) {
 	var opts []dht.Option
@@ -155,6 +143,9 @@ func createDHT(ctx context.Context, host host.Host, public bool, mode dht.ModeOp
 }
 
 func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(host.Host)) {
+	// if err := addDomainProtocol(); err != nil {
+	// 	log.Fatal(err)
+	// }
 	// connmgr, err := connmgr.NewConnManager(
 	// 	100, // Lowwater
 	// 	400, // HighWater,
@@ -172,9 +163,17 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 		libp2p.Identity(node.identity),
 		// Multiple listen addresses
 		libp2p.ListenAddrStrings(
-			"/ip4/0.0.0.0/tcp/"+port, // regular tcp connections
+			"/ip4/0.0.0.0/tcp/"+port,       // regular tcp connections
+			"/ip4/0.0.0.0/tcp/"+port+"/ws", // websockets
+			"/ip4/0.0.0.0/udp/"+port+"/quic-v1",
+			"/ip6/::/udp/"+port+"/quic-v1",
+			"/ip4/0.0.0.0/udp/"+port+"/quic-v1/webtransport",
+			"/ip6/::/udp/"+port+"/quic-v1/webtransport",
 		),
-		// support TLS connections
+		libp2p.Transport(quicTransport.NewTransport),
+		libp2p.Transport(webtransport.New),
+		libp2p.Transport(ws.New),
+		libp2p.Transport(tcp.NewTCPTransport),
 		// libp2p.Security(libp2ptls.ID, libp2ptls.New),
 		// support noise connections
 		// libp2p.Security(noise.ID, noise.New),
@@ -204,14 +203,17 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 		//
 		// This service is highly rate-limited and should not cause any
 		// performance issues.
-		// libp2p.EnableNATService(),
+		libp2p.EnableNATService(),
+		libp2p.EnableRelay(),
 	)
 	if err != nil {
 		panic(err)
 	}
 	node.Host = h2
 
-	log.Printf("Peer %s at %s\n", h2.ID(), h2.Addrs())
+	for _, addr := range h2.Addrs() {
+		fmt.Printf("Listening on: %s/p2p/%s\n", addr.String(), h2.ID())
+	}
 	ps, err := pubsub.NewGossipSub(ctx, h2)
 	if err != nil {
 		panic(err)
@@ -285,3 +287,25 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 
 	os.Exit(0)
 }
+
+// func (n *Node) JoinDomainCluster(ctx context.Context, domainPriKey string) error {
+// 	domainPubKey, err := crypto.UnmarshalPublicKey([]byte(domainPriKey))
+// 	if err != nil {
+// 		return err
+// 	}
+// 	topic, err := n.PubSub.Join(domainPubKey)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	go func() {
+// 		for {
+// 			msg, err := topic.Next(ctx)
+// 			if err != nil {
+// 				log.Println("Failed to read message:", err)
+// 				continue
+// 			}
+// 			log.Printf("Received message: %s\n", msg.Data)
+// 		}
+// 	}()
+// 	return nil
+// }

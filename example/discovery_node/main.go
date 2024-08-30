@@ -21,11 +21,47 @@ var DiscoveryNodeCfg = config.Config{
 	Name:           "dds_1",
 	Port:           "18804",
 	Mode:           dht.ModeClient,
-	BootstrapPeers: []string{},
+	BootstrapPeers: config.DefaultBootstrapNodes,
 }
 
 var domainList = map[string]*Libposemesh.Domain{}
 var portalList = map[string]*Libposemesh.Portal{}
+
+func updateClusterSecret(domain *Libposemesh.Domain, clusterSecret string) *Libposemesh.Domain {
+	builder := flatbuffers.NewBuilder(0)
+	domainId := builder.CreateByteString(domain.Id())
+	domainName := builder.CreateByteString(domain.Name())
+	writer := builder.CreateByteString(domain.Writer())
+
+	readerStrs := make([]flatbuffers.UOffsetT, domain.ReadersLength())
+	for i := 0; i < domain.ReadersLength(); i++ {
+		readerStrs[i] = builder.CreateByteString(domain.Readers(i))
+	}
+	Libposemesh.DomainStartReadersVector(builder, domain.ReadersLength())
+	for i := domain.ReadersLength() - 1; i >= 0; i-- {
+		builder.PrependUOffsetT(readerStrs[i])
+	}
+	readers := builder.EndVector(domain.ReadersLength())
+
+	Libposemesh.DomainStart(builder)
+	Libposemesh.DomainAddId(builder, domainId)
+	Libposemesh.DomainAddName(builder, domainName)
+	Libposemesh.DomainAddWriter(builder, writer)
+	Libposemesh.DomainAddReaders(builder, readers)
+	Libposemesh.DomainStartNodesVector(builder, domain.NodesLength())
+	for i := domain.NodesLength() - 1; i >= 0; i-- {
+		builder.PrependUOffsetT(builder.CreateByteString(domain.Nodes(i)))
+	}
+	nodes := builder.EndVector(domain.NodesLength())
+	Libposemesh.DomainAddNodes(builder, nodes)
+	clusterSecretOffset := builder.CreateString(clusterSecret)
+	Libposemesh.DomainAddClusterSecret(builder, clusterSecretOffset)
+
+	d := Libposemesh.DomainEnd(builder)
+	builder.FinishSizePrefixed(d)
+
+	return Libposemesh.GetSizePrefixedRootAsDomain(builder.FinishedBytes(), 0)
+}
 
 func createPortalStreamHandler(portalTopic *pubsub.Topic) func(s network.Stream) {
 	return func(s network.Stream) {
@@ -63,6 +99,7 @@ func createDomainStreamHandler(domainTopic *pubsub.Topic) func(s network.Stream)
 			return
 		}
 		domain := Libposemesh.GetRootAsDomain(buf, 0)
+		domain = updateClusterSecret(domain, "cluster_secret")
 		domainList[string(domain.Id())] = domain
 		if err := publishDomain(context.Background(), domainTopic, domain); err != nil {
 			log.Printf("Failed to publish domain %s: %s\n", domain.Id(), err)
@@ -73,6 +110,7 @@ func createDomainStreamHandler(domainTopic *pubsub.Topic) func(s network.Stream)
 
 func main() {
 	var name = flag.String("name", "discovery 1", "discovery service name")
+	port := flag.String("port", "18804", "port")
 	flag.Parse()
 	if name == nil || *name == "" {
 		log.Fatal("name is required")
@@ -84,6 +122,7 @@ func main() {
 		Types: DiscoveryNodeCfg.NodeTypes,
 	}
 	DiscoveryNodeCfg.Name = *name
+	DiscoveryNodeCfg.Port = *port
 	n, err := node.NewNode(info, "volume")
 	if err != nil {
 		log.Fatalf("Failed to create node: %s\n", err)
@@ -134,8 +173,6 @@ func main() {
 				Libposemesh.DomainAddReaders(builder, readers)
 				d := Libposemesh.DomainEnd(builder)
 				builder.FinishSizePrefixed(d)
-
-				Libposemesh.GetSizePrefixedRootAsDomain(builder.FinishedBytes(), 0)
 
 				if _, err := s.Write(builder.FinishedBytes()); err != nil {
 					log.Printf("Failed to write to stream: %s\n", err)
@@ -196,6 +233,15 @@ func publishDomain(ctx context.Context, domainTopic *pubsub.Topic, domain *Libpo
 	Libposemesh.DomainAddName(builder, domainName)
 	Libposemesh.DomainAddWriter(builder, writer)
 	Libposemesh.DomainAddReaders(builder, readers)
+	Libposemesh.DomainStartNodesVector(builder, domain.NodesLength())
+	for i := domain.NodesLength() - 1; i >= 0; i-- {
+		builder.PrependUOffsetT(builder.CreateByteString(domain.Nodes(i)))
+	}
+	nodes := builder.EndVector(domain.NodesLength())
+	Libposemesh.DomainAddNodes(builder, nodes)
+	clusterSecret := builder.CreateByteString(domain.ClusterSecret())
+	Libposemesh.DomainAddClusterSecret(builder, clusterSecret)
+
 	d := Libposemesh.DomainEnd(builder)
 	builder.FinishSizePrefixed(d)
 

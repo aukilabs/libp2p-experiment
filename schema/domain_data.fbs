@@ -23,7 +23,7 @@ table Pose {
   rx:float;
   ry:float;
   rz:float;
-  size:float;
+  rw:float;
   short_id:string;
 }
 

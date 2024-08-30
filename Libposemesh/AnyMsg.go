@@ -13,6 +13,8 @@ const (
 	AnyMsgUploadDomainDataReq    AnyMsg = 3
 	AnyMsgError                  AnyMsg = 4
 	AnyMsgDownloadDomainDataResp AnyMsg = 5
+	AnyMsgImage                  AnyMsg = 6
+	AnyMsgJob                    AnyMsg = 7
 )
 
 var EnumNamesAnyMsg = map[AnyMsg]string{
@@ -22,6 +24,8 @@ var EnumNamesAnyMsg = map[AnyMsg]string{
 	AnyMsgUploadDomainDataReq:    "UploadDomainDataReq",
 	AnyMsgError:                  "Error",
 	AnyMsgDownloadDomainDataResp: "DownloadDomainDataResp",
+	AnyMsgImage:                  "Image",
+	AnyMsgJob:                    "Job",
 }
 
 var EnumValuesAnyMsg = map[string]AnyMsg{
@@ -31,6 +35,8 @@ var EnumValuesAnyMsg = map[string]AnyMsg{
 	"UploadDomainDataReq":    AnyMsgUploadDomainDataReq,
 	"Error":                  AnyMsgError,
 	"DownloadDomainDataResp": AnyMsgDownloadDomainDataResp,
+	"Image":                  AnyMsgImage,
+	"Job":                    AnyMsgJob,
 }
 
 func (v AnyMsg) String() string {

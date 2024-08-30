@@ -138,3 +138,8 @@ func RandomBitmap() []byte {
 
 	return bitmap
 }
+
+func RandomFloat32() float32 {
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	return rand.Float32()
+}
