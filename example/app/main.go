@@ -453,7 +453,7 @@ func createPortal(ctx context.Context, h host.Host, domainService peer.ID) error
 
 func main() {
 	var domainId = flag.String("domainId", "", "domain id this app cares about")
-	var mode = flag.String("mode", "", "sender or receiver or both")
+	var mode = flag.String("mode", "", "sender or receiver or both or ping")
 	var shouldCreateDomain = flag.Bool("createDomain", false, "create domain and portal")
 	var name = flag.String("name", "dmt", "app name")
 	flag.Parse()
@@ -472,12 +472,11 @@ func main() {
 		log.Fatalf("Failed to create node: %s\n", err)
 	}
 	n.Start(ctx, &CameraAppCfg, func(h host.Host) {
-		var discoveryNodes []peer.ID
+		discoveryNodes := n.FindNodes(config.DISCOVERY_NODE)
 		for len(discoveryNodes) == 0 {
+			fmt.Println("finding discovery nodes...")
+			time.Sleep(2 * time.Second)
 			discoveryNodes = n.FindNodes(config.DISCOVERY_NODE)
-			if len(discoveryNodes) == 0 {
-				time.Sleep(2 * time.Second)
-			}
 		}
 		if *domainId != "" {
 			if mode == nil || *mode != "receiver" {
@@ -532,13 +531,27 @@ func main() {
 				for i := 0; i < len(discoveryNodes); i++ {
 					if err := createDomain(ctx, n, discoveryNodes[i]); err != nil {
 						continue
-					} else if err := createPortal(ctx, h, discoveryNodes[i]); err != nil {
-						continue
-					} else {
-						break
 					}
+					// } else if err := createPortal(ctx, h, discoveryNodes[i]); err != nil {
+					// 	continue
+					// } else {
+					// 	break
+					// }
 				}
 			}()
+		}
+		if mode == nil || *mode == "ping" {
+			fmt.Println("finding data nodes...")
+			dataNodes := n.FindNodes(config.DATA_NODE)
+			for len(dataNodes) == 0 {
+				time.Sleep(2 * time.Second)
+				dataNodes = n.FindNodes(config.DATA_NODE)
+			}
+
+			fmt.Printf("found %d data nodes", len(dataNodes))
+			if err := utils.Ping(ctx, h, dataNodes[0]); err != nil {
+				log.Fatal(err)
+			}
 		}
 	})
 }

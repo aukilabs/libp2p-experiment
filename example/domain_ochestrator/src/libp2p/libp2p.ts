@@ -9,8 +9,11 @@ import { webRTC } from '@libp2p/webrtc'
 import { circuitRelayTransport } from '@libp2p/circuit-relay-v2'
 import { webTransport } from '@libp2p/webtransport'
 
+
 const bootstrapList = [
-  "/ip4/192.168.3.21/udp/18804/quic-v1/webtransport/certhash/uEiD45cZavA4btLcCajRIkNkU8Fq84CzdcSmCyIsUanV0QQ/certhash/uEiD9N37MD_jR0DRupePA3VJLSWwYak6XUOpUlfNI2aYb4Q/p2p/12D3KooWLarz8bTotktq3UXPxWGxtbWUb9SRxeCTnWppAMt9eXkr", "/ip4/192.168.3.21/udp/18805/quic-v1/webtransport/certhash/uEiDi_mr7COjeN8kqe3KFLhg5Gx1g1oRYarl2SbVuQunlig/certhash/uEiAYgutxERsTglaucyxuFpmKAu3AXoypBhJXjk8d8w-qpg/p2p/12D3KooWLQUrSJJ8PvZ3iWT5mw14qiiuux8eV6irZMZZNDc368xk"
+  "/ip4/13.52.221.114/udp/18804/quic-v1/webtransport/certhash/uEiDHQLkYdqGEs1dBGAceUQgaaY9LMULyneVyZPPk0mkeng/certhash/uEiCEyjRhJ5xJgZ5jVTxH2rmDtqD0Gq34TlVDdbIiEqabAw/p2p/12D3KooWKZXUGZCg982NtauvYKfCLLc7BuQXHd4sCUVqhTEFvGPA",
+  "/ip4/192.168.3.21/udp/18804/quic-v1/webtransport/certhash/uEiD45cZavA4btLcCajRIkNkU8Fq84CzdcSmCyIsUanV0QQ/certhash/uEiD9N37MD_jR0DRupePA3VJLSWwYak6XUOpUlfNI2aYb4Q/p2p/12D3KooWLarz8bTotktq3UXPxWGxtbWUb9SRxeCTnWppAMt9eXkr",
+  "/ip4/192.168.3.21/udp/18805/quic-v1/webtransport/certhash/uEiDi_mr7COjeN8kqe3KFLhg5Gx1g1oRYarl2SbVuQunlig/certhash/uEiAYgutxERsTglaucyxuFpmKAu3AXoypBhJXjk8d8w-qpg/p2p/12D3KooWLQUrSJJ8PvZ3iWT5mw14qiiuux8eV6irZMZZNDc368xk"
 ]
 
 async function createNode() {

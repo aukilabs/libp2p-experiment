@@ -20,4 +20,4 @@ type Config struct {
 	DomainClusterSecret string      `cli:"domain-cluster-secret" usage:"Secret key for domain cluster" dft:""`
 }
 
-var DefaultBootstrapNodes = []string{"/ip4/127.0.0.1/tcp/18804/p2p/12D3KooWLarz8bTotktq3UXPxWGxtbWUb9SRxeCTnWppAMt9eXkr", "/ip4/127.0.0.1/tcp/18805/p2p/12D3KooWLQUrSJJ8PvZ3iWT5mw14qiiuux8eV6irZMZZNDc368xk"}
+var DefaultBootstrapNodes = []string{"/ip4/13.52.221.114/tcp/18804/p2p/12D3KooWKZXUGZCg982NtauvYKfCLLc7BuQXHd4sCUVqhTEFvGPA", "/ip4/127.0.0.1/tcp/18804/p2p/12D3KooWLarz8bTotktq3UXPxWGxtbWUb9SRxeCTnWppAMt9eXkr", "/ip4/127.0.0.1/tcp/18805/p2p/12D3KooWLQUrSJJ8PvZ3iWT5mw14qiiuux8eV6irZMZZNDc368xk"}

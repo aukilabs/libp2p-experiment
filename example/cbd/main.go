@@ -25,11 +25,6 @@ var visionCfg = config.Config{
 
 func main() {
 	name := flag.String("name", "cbd", "app name")
-	bootstrapNodes := flag.String("bootstrap-nodes", "", "bootstrap nodes, separated by comma")
-	bootstrapNodesList := []string{}
-	if bootstrapNodes != nil && *bootstrapNodes != "" {
-		bootstrapNodesList = append(bootstrapNodesList, *bootstrapNodes)
-	}
 	flag.Parse()
 	if name == nil || *name == "" {
 		log.Fatal("name is required")
@@ -41,7 +36,6 @@ func main() {
 		Types: visionCfg.NodeTypes,
 	}
 	visionCfg.Name = *name
-	visionCfg.BootstrapPeers = bootstrapNodesList
 	n, err := node.NewNode(info, "volume")
 	if err != nil {
 		log.Fatalf("Failed to create node: %s\n", err)

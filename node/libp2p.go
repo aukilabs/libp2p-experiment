@@ -204,7 +204,8 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 		// This service is highly rate-limited and should not cause any
 		// performance issues.
 		libp2p.EnableNATService(),
-		libp2p.EnableRelay(),
+		// libp2p.EnableRelay(),
+		libp2p.DisableRelay(),
 	)
 	if err != nil {
 		panic(err)
