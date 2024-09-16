@@ -1,6 +1,10 @@
 package config
 
 import (
+	"flag"
+	"log"
+	"strings"
+
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 )
 
@@ -27,4 +31,29 @@ type Config struct {
 var DefaultBootstrapNodes = []string{
 	"/ip4/13.52.221.114/udp/18804/quic-v1/p2p/12D3KooWKZXUGZCg982NtauvYKfCLLc7BuQXHd4sCUVqhTEFvGPA",
 	// "/ip4/127.0.0.1/udp/18804/quic-v1/p2p/12D3KooWBeuStnFAFdTcjn8HH8bu6VKiUXHy6fLHJ4bv5fDU2mi9",
+}
+
+func LoadFromCliArgs(cfg *Config) {
+	var name = flag.String("name", "", "node name")
+	port := flag.String("port", "", "port")
+	bootstrapPeers := flag.String("bootstrap", "", "comma-separated list of bootstrap multiaddresses")
+	enableRelay := flag.Bool("relay", false, "enable relay")
+	mode := flag.String("mode", "server", "mode")
+	flag.Parse()
+	if name == nil || *name == "" {
+		log.Fatal("name is required")
+	}
+	cfg.Name = *name
+	cfg.Port = *port
+	cfg.EnableRelay = *enableRelay
+	if bootstrapPeers != nil && *bootstrapPeers != "" {
+		cfg.BootstrapPeers = strings.Split(*bootstrapPeers, ",")
+	}
+	if mode != nil && *mode != "" {
+		if *mode == "client" {
+			cfg.Mode = dht.ModeClient
+		} else {
+			cfg.Mode = dht.ModeServer
+		}
+	}
 }

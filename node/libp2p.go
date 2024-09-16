@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -15,15 +14,19 @@ import (
 
 	"github.com/aukilabs/go-libp2p-experiment/config"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/multiformats/go-multiaddr"
+	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
+	dutil "github.com/libp2p/go-libp2p/p2p/discovery/util"
+	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/pnet"
 	"github.com/libp2p/go-libp2p/core/routing"
+	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	quicTransport "github.com/libp2p/go-libp2p/p2p/transport/quic"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
@@ -32,6 +35,7 @@ import (
 )
 
 const PosemeshService = "posemesh"
+const PosemeshRelayService = "posemesh/relay"
 const NodeInfoTopic = "posemesh_nodes"
 
 type NodeInfo struct {
@@ -93,14 +97,14 @@ func (n *Node) FindNodes(nodeType string) []peer.ID {
 	return nodes
 }
 
-func (n *Node) FindPeerAddresses(ctx context.Context, id peer.ID) ([]multiaddr.Multiaddr, error) {
+func (n *Node) FindPeerAddresses(ctx context.Context, id peer.ID) (*peer.AddrInfo, error) {
 	peer, err := n.kademliaDHT.FindPeer(ctx, id)
 	if err != nil {
 		log.Printf("Failed to find peer: %s\n", err)
 		return nil, err
 	}
 	log.Printf("Found peer: %s\n", peer)
-	return peer.Addrs, nil
+	return &peer, nil
 }
 
 type StepInfo struct {
@@ -120,17 +124,14 @@ type OutputInfo struct {
 	ProtocolID string  `json:"protocol_id"`
 }
 
-func createDHT(ctx context.Context, host host.Host, public bool, mode dht.ModeOpt, bootstrapPeers ...peer.AddrInfo) (routing.Routing, error) {
+func createDHT(ctx context.Context, host host.Host, mode dht.ModeOpt, bootstrapPeers ...peer.AddrInfo) (routing.Routing, error) {
 	var opts []dht.Option
 
 	opts = append(opts,
 		dht.Concurrency(10),
-		dht.Mode(dht.ModeServer),
+		dht.Mode(mode),
 		dht.BootstrapPeers(bootstrapPeers...),
 		dht.ProtocolPrefix("/posemesh"),
-		// dht.QueryFilter(dht.PublicQueryFilter),
-		// dht.RoutingTableFilter(dht.PublicRoutingTableFilter),
-		// dht.RoutingTablePeerDiversityFilter(dht.NewRTPeerDiversityFilter(host, 2, 3)),
 	)
 
 	kademliaDHT, err := dht.New(
@@ -147,21 +148,8 @@ func createDHT(ctx context.Context, host host.Host, public bool, mode dht.ModeOp
 	go func() {
 		// find peers
 		for {
-			peers := kademliaDHT.RoutingTable().ListPeers()
-			if err != nil {
-				fmt.Println("failed to find closest peers.", err)
-			}
-			for _, p := range peers {
-				fmt.Println("found peer: ", p)
-				pi, err := kademliaDHT.FindPeer(ctx, p)
-				if err != nil {
-					fmt.Println("failed to find peer: ", err)
-				}
-				if err := host.Connect(ctx, pi); err != nil {
-					fmt.Println("failed to connect to peer: ", err)
-				}
-				host.Peerstore().AddAddrs(p, pi.Addrs, time.Hour)
-			}
+
+			kademliaDHT.RoutingTable().ListPeers()
 			time.Sleep(10 * time.Second)
 		}
 	}()
@@ -183,7 +171,17 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 			log.Fatal(err)
 		}
 	}
-	h2, err := libp2p.New(
+	addrs := make([]peer.AddrInfo, len(cfg.BootstrapPeers))
+	for i, addr := range cfg.BootstrapPeers {
+		ai, err := peer.AddrInfoFromString(addr)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		addrs[i] = *ai
+	}
+	var routingDiscovery *drouting.RoutingDiscovery
+	opts := []libp2p.Option{
 		libp2p.PrivateNetwork(psk),
 		// Use the keypair we generated
 		libp2p.Identity(node.identity),
@@ -212,15 +210,8 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 		libp2p.NATPortMap(),
 		// Let this host use the DHT to find other hosts
 		libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
-			addrs := make([]peer.AddrInfo, len(cfg.BootstrapPeers))
-			for i, addr := range cfg.BootstrapPeers {
-				ai, err := peer.AddrInfoFromString(addr)
-				if err != nil {
-					return nil, err
-				}
-				addrs[i] = *ai
-			}
-			idht, err := createDHT(ctx, h, true, dht.ModeServer, addrs...)
+			idht, err := createDHT(ctx, h, dht.ModeServer, addrs...)
+			node.kademliaDHT = idht
 			return idht, err
 		}),
 		// If you want to help other peers to figure out if they are behind
@@ -231,31 +222,47 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 		// performance issues.
 		libp2p.EnableNATService(),
 		libp2p.EnableHolePunching(),
-	)
+		libp2p.EnableAutoRelayWithPeerSource(func(ctx context.Context, num int) <-chan peer.AddrInfo {
+			for routingDiscovery == nil {
+				time.Sleep(3 * time.Second)
+			}
+			relaysCh, err := routingDiscovery.FindPeers(ctx, PosemeshRelayService, discovery.Limit(num))
+			if err != nil {
+				log.Println(err)
+				return nil
+			}
+			return relaysCh
+		}, autorelay.WithMaxCandidates(10)),
+		libp2p.Ping(true),
+	}
+	h, err := libp2p.New(opts...)
 	if err != nil {
 		panic(err)
 	}
-	node.Host = h2
+	node.Host = h
+
+	routingDiscovery = drouting.NewRoutingDiscovery(node.kademliaDHT)
 
 	if cfg.EnableRelay {
-		if _, err := relay.New(h2); err != nil {
+		if _, err := relay.New(h); err != nil {
 			panic(err)
 		}
+		dutil.Advertise(ctx, routingDiscovery, PosemeshRelayService)
 	}
 
-	log.Println("Host created. We are:", h2.ID())
-	for _, addr := range h2.Addrs() {
-		log.Printf("Listening on: %s/p2p/%s\n", addr.String(), h2.ID())
+	log.Println("Host created. We are:", h.ID())
+	for _, addr := range h.Addrs() {
+		log.Printf("Listening on: %s/p2p/%s\n", addr.String(), h.ID())
 	}
-	ps, err := pubsub.NewGossipSub(ctx, h2)
+	ps, err := pubsub.NewGossipSub(ctx, h)
 	if err != nil {
 		panic(err)
 	}
 	node.PubSub = ps
 
-	// if err := setupMDNS(h2); err != nil {
-	// 	panic(err)
-	// }
+	if err := setupMDNS(ctx, h); err != nil {
+		panic(err)
+	}
 
 	topic, err := ps.Join(NodeInfoTopic)
 	if err != nil {
@@ -321,13 +328,13 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 				log.Printf("invalid message: %s\n", msg.Data)
 				continue
 			}
-			if neighber.ID != h2.ID() {
+			if neighber.ID != h.ID() {
 				node.AddNode(&neighber)
 			}
 		}
 	}()
 
-	handlers(h2)
+	handlers(h)
 
 	c := make(chan os.Signal, 1)
 
@@ -337,6 +344,39 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 	log.Printf("\rExiting...\n")
 
 	os.Exit(0)
+}
+
+type discoveryNotifee struct {
+	PeerChan chan peer.AddrInfo
+}
+
+// interface to be called when new  peer is found
+func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
+	n.PeerChan <- pi
+}
+
+func setupMDNS(ctx context.Context, h host.Host) error {
+	n := &discoveryNotifee{}
+	n.PeerChan = make(chan peer.AddrInfo)
+	ser := mdns.NewMdnsService(h, PosemeshService, n)
+	if err := ser.Start(); err != nil {
+		return err
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				ser.Close()
+				return
+			case pi := <-n.PeerChan:
+				log.Println("Found peer:", pi)
+				if err := h.Connect(context.Background(), pi); err != nil {
+					log.Println("Failed to connect to peer:", err)
+				}
+			}
+		}
+	}()
+	return nil
 }
 
 // func (n *Node) JoinDomainCluster(ctx context.Context, domainPriKey string) error {

@@ -75,11 +75,6 @@ func main() {
 		log.Fatalf("Failed to create node: %s\n", err)
 	}
 	n.Start(ctx, &DiscoveryNodeCfg, func(h host.Host) {
-		// _, err := relay.New(h)
-		// if err != nil {
-		// 	log.Fatalf("Failed to create relay: %s\n", err)
-		// }
-
 		portalTopic, domainTopic, err := SyncDomainsAndPortals(ctx, h, n.BasePath, n.PubSub)
 		if err != nil {
 			log.Fatalf("Failed to sync domains and portals: %s\n", err)
