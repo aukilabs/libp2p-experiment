@@ -1,6 +1,7 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -21,7 +22,9 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/pnet"
 	"github.com/libp2p/go-libp2p/core/routing"
+	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	quicTransport "github.com/libp2p/go-libp2p/p2p/transport/quic"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	ws "github.com/libp2p/go-libp2p/p2p/transport/websocket"
@@ -51,7 +54,7 @@ type Node struct {
 
 func NewNode(info NodeInfo, basePath string) (node *Node, err error) {
 	p := path.Join(basePath, info.Name)
-	priv := initPeerIdentity(p)
+	priv := InitPeerIdentity(p)
 	info.ID, err = peer.IDFromPublicKey(priv.GetPublic())
 	if err != nil {
 		return nil, err
@@ -125,9 +128,11 @@ func createDHT(ctx context.Context, host host.Host, public bool, mode dht.ModeOp
 		dht.Mode(dht.ModeServer),
 		dht.BootstrapPeers(bootstrapPeers...),
 		dht.ProtocolPrefix("/posemesh"),
+		// dht.QueryFilter(dht.PublicQueryFilter),
+		// dht.RoutingTableFilter(dht.PublicRoutingTableFilter),
+		// dht.RoutingTablePeerDiversityFilter(dht.NewRTPeerDiversityFilter(host, 2, 3)),
 	)
 
-	// dual.New(ctx, host, dual.DHTOption(opts...))
 	kademliaDHT, err := dht.New(
 		ctx, host, opts...,
 	)
@@ -139,26 +144,47 @@ func createDHT(ctx context.Context, host host.Host, public bool, mode dht.ModeOp
 		return nil, err
 	}
 
+	go func() {
+		// find peers
+		for {
+			peers := kademliaDHT.RoutingTable().ListPeers()
+			if err != nil {
+				fmt.Println("failed to find closest peers.", err)
+			}
+			for _, p := range peers {
+				fmt.Println("found peer: ", p)
+				pi, err := kademliaDHT.FindPeer(ctx, p)
+				if err != nil {
+					fmt.Println("failed to find peer: ", err)
+				}
+				if err := host.Connect(ctx, pi); err != nil {
+					fmt.Println("failed to connect to peer: ", err)
+				}
+				host.Peerstore().AddAddrs(p, pi.Addrs, time.Hour)
+			}
+			time.Sleep(10 * time.Second)
+		}
+	}()
+
 	return kademliaDHT, nil
 }
 
 func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(host.Host)) {
-	// if err := addDomainProtocol(); err != nil {
-	// 	log.Fatal(err)
-	// }
-	// connmgr, err := connmgr.NewConnManager(
-	// 	100, // Lowwater
-	// 	400, // HighWater,
-	// 	connmgr.WithGracePeriod(time.Minute),
-	// )
-	// if err != nil {
-	// 	panic(err)
-	// }
 	port := cfg.Port
 	if port == "" {
-		port = "0"
+		port = "18808"
+	}
+	var psk pnet.PSK
+	var err error
+	if cfg.Psk != "" {
+		pskReader := bytes.NewReader([]byte(cfg.Psk))
+		psk, err = pnet.DecodeV1PSK(pskReader)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	h2, err := libp2p.New(
+		libp2p.PrivateNetwork(psk),
 		// Use the keypair we generated
 		libp2p.Identity(node.identity),
 		// Multiple listen addresses
@@ -183,7 +209,7 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 		// connections by attaching a connection manager.
 		// libp2p.ConnectionManager(connmgr),
 		// Attempt to open ports using uPNP for NATed hosts.
-		// libp2p.NATPortMap(),
+		libp2p.NATPortMap(),
 		// Let this host use the DHT to find other hosts
 		libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
 			addrs := make([]peer.AddrInfo, len(cfg.BootstrapPeers))
@@ -204,16 +230,22 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 		// This service is highly rate-limited and should not cause any
 		// performance issues.
 		libp2p.EnableNATService(),
-		// libp2p.EnableRelay(),
-		libp2p.DisableRelay(),
+		libp2p.EnableHolePunching(),
 	)
 	if err != nil {
 		panic(err)
 	}
 	node.Host = h2
 
+	if cfg.EnableRelay {
+		if _, err := relay.New(h2); err != nil {
+			panic(err)
+		}
+	}
+
+	log.Println("Host created. We are:", h2.ID())
 	for _, addr := range h2.Addrs() {
-		fmt.Printf("Listening on: %s/p2p/%s\n", addr.String(), h2.ID())
+		log.Printf("Listening on: %s/p2p/%s\n", addr.String(), h2.ID())
 	}
 	ps, err := pubsub.NewGossipSub(ctx, h2)
 	if err != nil {
@@ -229,6 +261,24 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 	if err != nil {
 		panic(err)
 	}
+
+	eh, err := topic.EventHandler()
+	if err != nil {
+		panic(err)
+	}
+
+	go func() {
+		for {
+			e, err := eh.NextPeerEvent(ctx)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			if e.Type == pubsub.PeerLeave {
+				delete(node.neighbors, e.Peer)
+			}
+		}
+	}()
 	defer topic.Close()
 	sub, err := topic.Subscribe()
 	if err != nil {

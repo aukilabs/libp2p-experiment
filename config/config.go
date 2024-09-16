@@ -1,6 +1,8 @@
 package config
 
-import dht "github.com/libp2p/go-libp2p-kad-dht"
+import (
+	dht "github.com/libp2p/go-libp2p-kad-dht"
+)
 
 const ADAM_NODE = "ADAM"
 const DATA_NODE = "DATA"
@@ -18,6 +20,11 @@ type Config struct {
 	Name                string      `cli:"name" usage:"The name of the node" dft:""`
 	OwnerWallet         string      `cli:"owner-wallet" usage:"The wallet of the owner" dft:""`
 	DomainClusterSecret string      `cli:"domain-cluster-secret" usage:"Secret key for domain cluster" dft:""`
+	Psk                 string      `cli:"psk" usage:"The pre-shared key for the node" dft:""`
+	EnableRelay         bool        `cli:"enable-relay" usage:"Enable relay" dft:"false"`
 }
 
-var DefaultBootstrapNodes = []string{"/ip4/13.52.221.114/tcp/18804/p2p/12D3KooWKZXUGZCg982NtauvYKfCLLc7BuQXHd4sCUVqhTEFvGPA", "/ip4/127.0.0.1/tcp/18804/p2p/12D3KooWLarz8bTotktq3UXPxWGxtbWUb9SRxeCTnWppAMt9eXkr", "/ip4/127.0.0.1/tcp/18805/p2p/12D3KooWLQUrSJJ8PvZ3iWT5mw14qiiuux8eV6irZMZZNDc368xk"}
+var DefaultBootstrapNodes = []string{
+	"/ip4/13.52.221.114/udp/18804/quic-v1/p2p/12D3KooWKZXUGZCg982NtauvYKfCLLc7BuQXHd4sCUVqhTEFvGPA",
+	// "/ip4/127.0.0.1/udp/18804/quic-v1/p2p/12D3KooWBeuStnFAFdTcjn8HH8bu6VKiUXHy6fLHJ4bv5fDU2mi9",
+}

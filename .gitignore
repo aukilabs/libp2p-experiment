@@ -12,6 +12,9 @@ Sessionx.vim
 tags
 [._]*.un~
 
+# Editor
+.vscode
+
 # Compiled source
 *.com
 *.class
