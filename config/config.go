@@ -38,7 +38,7 @@ func LoadFromCliArgs(cfg *Config) {
 	port := flag.String("port", "", "port")
 	bootstrapPeers := flag.String("bootstrap", "", "comma-separated list of bootstrap multiaddresses")
 	enableRelay := flag.Bool("relay", false, "enable relay")
-	mode := flag.String("mode", "server", "mode")
+	mode := flag.String("mode", "", "mode")
 	flag.Parse()
 	if (name == nil || *name == "") && cfg.Name == "" {
 		log.Fatal("name is required")

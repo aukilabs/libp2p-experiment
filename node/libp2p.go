@@ -145,27 +145,27 @@ func createDHT(ctx context.Context, host host.Host, mode dht.ModeOpt, bootstrapP
 		return nil, err
 	}
 
-	// go func() {
-	// 	// find peers
-	// 	for {
-	// 		time.Sleep(10 * time.Second)
-	// 		peers := kademliaDHT.RoutingTable().ListPeers()
+	go func() {
+		// find peers
+		for {
+			time.Sleep(10 * time.Second)
+			peers := kademliaDHT.RoutingTable().ListPeers()
 
-	// 		for _, p := range peers {
-	// 			log.Println("Found peer:", p)
-	// 			addr, err := kademliaDHT.FindPeer(ctx, p)
-	// 			if err != nil {
-	// 				log.Println(err)
-	// 				continue
-	// 			}
-	// 			err = host.Connect(ctx, addr)
-	// 			if err != nil {
-	// 				log.Println(err)
-	// 				continue
-	// 			}
-	// 		}
-	// 	}
-	// }()
+			for _, p := range peers {
+				log.Println("Found peer:", p)
+				addr, err := kademliaDHT.FindPeer(ctx, p)
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+				err = host.Connect(ctx, addr)
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+			}
+		}
+	}()
 
 	return kademliaDHT, nil
 }
@@ -223,7 +223,7 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 		libp2p.NATPortMap(),
 		// Let this host use the DHT to find other hosts
 		libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
-			idht, err := createDHT(ctx, h, dht.ModeServer, addrs...)
+			idht, err := createDHT(ctx, h, cfg.Mode, addrs...)
 			node.kademliaDHT = idht
 			return idht, err
 		}),
@@ -235,7 +235,12 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 		// performance issues.
 		libp2p.EnableNATService(),
 		libp2p.EnableHolePunching(),
-		libp2p.EnableAutoRelayWithPeerSource(func(ctx context.Context, num int) <-chan peer.AddrInfo {
+		libp2p.Ping(true),
+	}
+	if cfg.Mode == dht.ModeClient {
+		opts = append(opts, libp2p.EnableRelay())
+	} else {
+		opts = append(opts, libp2p.EnableAutoRelayWithPeerSource(func(ctx context.Context, num int) <-chan peer.AddrInfo {
 			for routingDiscovery == nil {
 				time.Sleep(3 * time.Second)
 			}
@@ -245,9 +250,12 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 				return nil
 			}
 			return relaysCh
-		}, autorelay.WithMaxCandidates(10)),
-		libp2p.Ping(true),
+		}, autorelay.WithMaxCandidates(10)))
 	}
+	if cfg.EnableRelay {
+		opts = append(opts, libp2p.ForceReachabilityPublic())
+	}
+
 	h, err := libp2p.New(opts...)
 	if err != nil {
 		panic(err)
