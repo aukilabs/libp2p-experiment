@@ -148,9 +148,22 @@ func createDHT(ctx context.Context, host host.Host, mode dht.ModeOpt, bootstrapP
 	go func() {
 		// find peers
 		for {
-
-			kademliaDHT.RoutingTable().ListPeers()
 			time.Sleep(10 * time.Second)
+			peers := kademliaDHT.RoutingTable().ListPeers()
+
+			for _, p := range peers {
+				log.Println("Found peer:", p)
+				addr, err := kademliaDHT.FindPeer(ctx, p)
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+				err = host.Connect(ctx, addr)
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+			}
 		}
 	}()
 
@@ -160,7 +173,7 @@ func createDHT(ctx context.Context, host host.Host, mode dht.ModeOpt, bootstrapP
 func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(host.Host)) {
 	port := cfg.Port
 	if port == "" {
-		port = "18808"
+		port = "0"
 	}
 	var psk pnet.PSK
 	var err error
@@ -248,6 +261,7 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 			panic(err)
 		}
 		dutil.Advertise(ctx, routingDiscovery, PosemeshRelayService)
+		log.Println("Relay enabled")
 	}
 
 	log.Println("Host created. We are:", h.ID())

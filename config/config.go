@@ -29,7 +29,7 @@ type Config struct {
 }
 
 var DefaultBootstrapNodes = []string{
-	"/ip4/13.52.221.114/udp/18804/quic-v1/p2p/12D3KooWKZXUGZCg982NtauvYKfCLLc7BuQXHd4sCUVqhTEFvGPA",
+	"/ip4/13.52.221.114/udp/18804/quic-v1/p2p/12D3KooWSpGa2SQ3iz9KrJrgyoZE2jZUtSx8nKCfNaXYp8FY5irE",
 	// "/ip4/127.0.0.1/udp/18804/quic-v1/p2p/12D3KooWBeuStnFAFdTcjn8HH8bu6VKiUXHy6fLHJ4bv5fDU2mi9",
 }
 
