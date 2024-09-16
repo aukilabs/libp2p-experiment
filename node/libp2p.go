@@ -145,27 +145,27 @@ func createDHT(ctx context.Context, host host.Host, mode dht.ModeOpt, bootstrapP
 		return nil, err
 	}
 
-	go func() {
-		// find peers
-		for {
-			time.Sleep(10 * time.Second)
-			peers := kademliaDHT.RoutingTable().ListPeers()
+	// go func() {
+	// 	// find peers
+	// 	for {
+	// 		time.Sleep(10 * time.Second)
+	// 		peers := kademliaDHT.RoutingTable().ListPeers()
 
-			for _, p := range peers {
-				log.Println("Found peer:", p)
-				addr, err := kademliaDHT.FindPeer(ctx, p)
-				if err != nil {
-					log.Println(err)
-					continue
-				}
-				err = host.Connect(ctx, addr)
-				if err != nil {
-					log.Println(err)
-					continue
-				}
-			}
-		}
-	}()
+	// 		for _, p := range peers {
+	// 			log.Println("Found peer:", p)
+	// 			addr, err := kademliaDHT.FindPeer(ctx, p)
+	// 			if err != nil {
+	// 				log.Println(err)
+	// 				continue
+	// 			}
+	// 			err = host.Connect(ctx, addr)
+	// 			if err != nil {
+	// 				log.Println(err)
+	// 				continue
+	// 			}
+	// 		}
+	// 	}
+	// }()
 
 	return kademliaDHT, nil
 }

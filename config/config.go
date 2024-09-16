@@ -40,13 +40,19 @@ func LoadFromCliArgs(cfg *Config) {
 	enableRelay := flag.Bool("relay", false, "enable relay")
 	mode := flag.String("mode", "server", "mode")
 	flag.Parse()
-	if name == nil || *name == "" {
+	if (name == nil || *name == "") && cfg.Name == "" {
 		log.Fatal("name is required")
 	}
-	cfg.Name = *name
-	cfg.Port = *port
-	cfg.EnableRelay = *enableRelay
-	if bootstrapPeers != nil && *bootstrapPeers != "" {
+	if *name == "" {
+		*name = cfg.Name
+	}
+	if *port == "" {
+		*port = cfg.Port
+	}
+	if *enableRelay == false {
+		*enableRelay = cfg.EnableRelay
+	}
+	if *bootstrapPeers != "" {
 		cfg.BootstrapPeers = strings.Split(*bootstrapPeers, ",")
 	}
 	if mode != nil && *mode != "" {

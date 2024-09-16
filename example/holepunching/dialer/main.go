@@ -55,11 +55,13 @@ func main() {
 		}
 
 		log.Println("Connected to peer")
-		resCh := ping.Ping(ctx, h, addr.ID)
-		res := <-resCh
-		if res.Error != nil {
-			log.Fatalf("Failed to ping peer: %s\n", res.Error)
+		for {
+			resCh := ping.Ping(ctx, h, addr.ID)
+			res := <-resCh
+			if res.Error != nil {
+				log.Fatalf("Failed to ping peer: %s\n", res.Error)
+			}
+			log.Println("Pinged peer")
 		}
-		log.Println("Pinged peer")
 	})
 }
