@@ -43,14 +43,14 @@ func LoadFromCliArgs(cfg *Config) {
 	if (name == nil || *name == "") && cfg.Name == "" {
 		log.Fatal("name is required")
 	}
-	if *name == "" {
-		*name = cfg.Name
+	if *name != "" {
+		cfg.Name = *name
 	}
-	if *port == "" {
-		*port = cfg.Port
+	if *port != "" {
+		cfg.Port = *port
 	}
-	if *enableRelay == false {
-		*enableRelay = cfg.EnableRelay
+	if *enableRelay != false {
+		cfg.EnableRelay = *enableRelay
 	}
 	if *bootstrapPeers != "" {
 		cfg.BootstrapPeers = strings.Split(*bootstrapPeers, ",")
