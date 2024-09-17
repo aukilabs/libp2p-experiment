@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -35,18 +34,17 @@ func main() {
 		log.Fatalf("Failed to create node: %s\n", err)
 	}
 	n.Start(ctx, &DefaultDialer, func(h host.Host) {
-		fmt.Println("Finding data node...")
+		log.Println("Finding data node...")
 		nodes := n.FindNodes(config.DATA_NODE)
 		for len(nodes) == 0 {
 			time.Sleep(5 * time.Second)
 			nodes = n.FindNodes(config.DATA_NODE)
 		}
 
-		fmt.Printf("Finding %s...", nodes[0])
+		log.Printf("Finding %s...", nodes[0])
 		addr, err := n.FindPeerAddresses(ctx, nodes[0])
 		for err != nil {
-			fmt.Println("Failed to find peer address: ", err)
-			time.Sleep(5 * time.Second)
+			time.Sleep(10 * time.Second)
 			addr, err = n.FindPeerAddresses(ctx, nodes[0])
 		}
 		// addrStr := "/ip4/13.52.221.114/udp/18804/quic-v1/p2p/12D3KooWSpGa2SQ3iz9KrJrgyoZE2jZUtSx8nKCfNaXYp8FY5irE/p2p-circuit/p2p/" + nodes[0].String()
@@ -62,7 +60,9 @@ func main() {
 
 		log.Println("Connected to peer")
 
-		resCh := ping.Ping(ctx, h, addr.ID)
+		timeoutCtx, cancel := context.WithTimeout(ctx, time.Second*30)
+		defer cancel()
+		resCh := ping.Ping(timeoutCtx, h, addr.ID)
 		for res := range resCh {
 			if res.Error != nil {
 				log.Printf("Failed to ping peer: %s\n", res.Error)

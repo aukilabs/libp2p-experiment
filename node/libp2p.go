@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -145,27 +146,25 @@ func createDHT(ctx context.Context, host host.Host, mode dht.ModeOpt, bootstrapP
 		return nil, err
 	}
 
-	go func() {
-		// find peers
-		for {
-			time.Sleep(10 * time.Second)
-			peers := kademliaDHT.RoutingTable().ListPeers()
+	// go func() {
+	// 	for {
+	// 		time.Sleep(10 * time.Second)
+	// 		peers := kademliaDHT.RoutingTable().ListPeers()
 
-			for _, p := range peers {
-				log.Println("Found peer:", p)
-				addr, err := kademliaDHT.FindPeer(ctx, p)
-				if err != nil {
-					log.Println(err)
-					continue
-				}
-				err = host.Connect(ctx, addr)
-				if err != nil {
-					log.Println(err)
-					continue
-				}
-			}
-		}
-	}()
+	// 		for _, p := range peers {
+	// 			addr, err := kademliaDHT.FindPeer(ctx, p)
+	// 			if err != nil {
+	// 				log.Println(err)
+	// 				continue
+	// 			}
+	// 			err = host.Connect(ctx, addr)
+	// 			if err != nil {
+	// 				log.Println(err)
+	// 				continue
+	// 			}
+	// 		}
+	// 	}
+	// }()
 
 	return kademliaDHT, nil
 }
@@ -354,6 +353,35 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 				node.AddNode(&neighber)
 			}
 		}
+	}()
+
+	// h.Network().Notify(&network.NotifyBundle{
+	// 	DisconnectedF: func(_ network.Network, conn network.Conn) {
+	// 		fmt.Printf("Disconnected from peer %s\n", conn.RemotePeer())
+	// 	},
+	// })
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				time.Sleep(30 * time.Second)
+				connections := h.Network().Conns()
+				for i, conn := range connections {
+					if i == 0 {
+						fmt.Print("###############CONNECTIONS################\n\n")
+					}
+					fmt.Printf("Connected to peer %s at %s\n", conn.RemotePeer(), conn.RemoteMultiaddr())
+					if i == len(connections)-1 {
+						fmt.Println("\n\n###############CONNECTIONS################")
+					}
+				}
+
+			}
+		}
+
 	}()
 
 	handlers(h)
