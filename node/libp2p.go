@@ -357,7 +357,7 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 
 	// h.Network().Notify(&network.NotifyBundle{
 	// 	DisconnectedF: func(_ network.Network, conn network.Conn) {
-	// 		fmt.Printf("Disconnected from peer %s\n", conn.RemotePeer())
+	// 		fmt.Printf("Disconnected from %s\n", conn.RemoteMultiaddr())
 	// 	},
 	// })
 
