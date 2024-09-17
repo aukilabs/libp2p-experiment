@@ -15,7 +15,7 @@ var DefaultRelayNode = config.Config{
 	Name:           "relay_1",
 	Port:           "",
 	Mode:           dht.ModeServer,
-	BootstrapPeers: config.DefaultBootstrapNodes,
+	BootstrapPeers: []string{},
 	EnableRelay:    true,
 }
 

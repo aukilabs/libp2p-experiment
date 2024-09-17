@@ -10,7 +10,6 @@ import (
 	"github.com/aukilabs/go-libp2p-experiment/node"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 )
 
@@ -61,10 +60,9 @@ func main() {
 			log.Fatalf("Failed to connect to peer: %s\n", err)
 		}
 
-		tctx := network.WithUseTransient(ctx, "hi")
 		log.Println("Connected to peer")
 
-		resCh := ping.Ping(tctx, h, addr.ID)
+		resCh := ping.Ping(ctx, h, addr.ID)
 		for res := range resCh {
 			if res.Error != nil {
 				log.Printf("Failed to ping peer: %s\n", res.Error)
