@@ -7,13 +7,13 @@ This example demonstrates how to use mDNS (Multicast DNS) in libp2p to discover 
 - Faster Initialization: While DHT can take up to a minute to initialize, mDNS - provides almost instant discovery.
 - Ideal for Latency-Sensitive Applications: Connecting to local nodes is significantly faster than connecting to remote nodes, making mDNS a great choice for latency-sensitive use cases.
 
-### Use Case Example:
-Imagine we have deployed a few Salvia nodes, CBD nodes, and a Cactus backend on the same network. When THC joins that network, it can quickly set up direct connections with the currently available Salvia and CBD nodes. This allows THC to begin streaming frames to those nodes with minimal delay and less effort in infrastructure—there’s no need to hard-code Salvia and CBD URLs or worry about nodes going down or coming back up, as THC will dynamically connect to whichever nodes are available.
-
 ### Latency Comparison:
-- Local node ping (RTT) is less than 1ms.
-- Remote private node via relay (from the holepunching example) has an RTT of around 300ms.
-- Direct connection to a remote private node (from the holepunching example) has an RTT of around 200ms.
+- Local node UDP ping (RTT) is less than 1ms.
+- UDP pinging remote private node via relay (from the holepunching example) has an RTT of around 300ms.
+- UDP direct connection to a remote private node (from the holepunching example) has an RTT of around 200ms.
+
+### Use Case Example:
+Imagine we have deployed a few motion servers, vision servers, and a Cactus backend on the same network. When THC joins that network, it can quickly set up direct connections with the currently available motion and vision servers. This allows THC to begin streaming frames to those nodes with minimal delay and less effort in infrastructure—there’s no need to hard-code motion server and vision server URLs or worry about nodes going down or coming back up, as THC will dynamically connect to whichever nodes are available.
 
 ## Setup
 ```
