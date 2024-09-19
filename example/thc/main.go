@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/aukilabs/go-libp2p-experiment/Libposemesh"
@@ -184,6 +187,14 @@ func main() {
 		j.Steps = append(j.Steps, cbdJob)
 		go streamCameraFeed(ctx, h, &j)
 	})
+	c := make(chan os.Signal, 1)
+
+	signal.Notify(c, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+	<-c
+
+	log.Printf("\rExiting...\n")
+
+	os.Exit(0)
 }
 
 func streamCameraFeed(ctx context.Context, h host.Host, j *job.Job) {

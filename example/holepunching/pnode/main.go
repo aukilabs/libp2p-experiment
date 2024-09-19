@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/aukilabs/go-libp2p-experiment/config"
 	"github.com/aukilabs/go-libp2p-experiment/node"
@@ -32,4 +35,13 @@ func main() {
 		log.Fatalf("Failed to create node: %s\n", err)
 	}
 	n.Start(ctx, &DefaultTarget, func(h host.Host) {})
+
+	c := make(chan os.Signal, 1)
+
+	signal.Notify(c, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+	<-c
+
+	log.Printf("\rExiting...\n")
+
+	os.Exit(0)
 }
