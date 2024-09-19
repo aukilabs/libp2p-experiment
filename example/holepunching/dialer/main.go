@@ -49,11 +49,6 @@ func main() {
 			time.Sleep(30 * time.Second)
 			addr, err = n.FindPeerAddresses(ctx, nodes[0])
 		}
-		// addrStr := "/ip4/13.52.221.114/udp/18804/quic-v1/p2p/12D3KooWSpGa2SQ3iz9KrJrgyoZE2jZUtSx8nKCfNaXYp8FY5irE/p2p-circuit/p2p/" + nodes[0].String()
-		// addr, err := peer.AddrInfoFromString(addrStr)
-		// if err != nil {
-		// 	log.Fatalf("Failed to create multiaddr: %s\n", err)
-		// }
 
 		log.Printf("Connecting to %v...", addr.Addrs)
 		if err := h.Connect(ctx, *addr); err != nil {
@@ -77,7 +72,7 @@ func main() {
 		for _, c := range h.Network().(*swarm.Swarm).ConnsToPeer(nodes[0]) {
 			// close the connection if it is a relay connection to prove that hole punching works
 			if _, err := c.RemoteMultiaddr().ValueForProtocol(multiaddr.P_CIRCUIT); err == nil {
-				log.Printf("Closing connection to %s\n", c.RemotePeer())
+				log.Printf("Closing relay connection to %s\n", c.RemotePeer())
 				c.Close()
 			}
 		}
