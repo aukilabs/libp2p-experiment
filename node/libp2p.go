@@ -6,11 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
 	"path"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/aukilabs/go-libp2p-experiment/config"
@@ -146,26 +143,6 @@ func createDHT(ctx context.Context, host host.Host, mode dht.ModeOpt, bootstrapP
 		return nil, err
 	}
 
-	// go func() {
-	// 	for {
-	// 		time.Sleep(10 * time.Second)
-	// 		peers := kademliaDHT.RoutingTable().ListPeers()
-
-	// 		for _, p := range peers {
-	// 			addr, err := kademliaDHT.FindPeer(ctx, p)
-	// 			if err != nil {
-	// 				log.Println(err)
-	// 				continue
-	// 			}
-	// 			err = host.Connect(ctx, addr)
-	// 			if err != nil {
-	// 				log.Println(err)
-	// 				continue
-	// 			}
-	// 		}
-	// 	}
-	// }()
-
 	return kademliaDHT, nil
 }
 
@@ -281,7 +258,7 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 	}
 	node.PubSub = ps
 
-	if err := setupMDNS(ctx, h); err != nil {
+	if err := node.setupMDNS(ctx, h); err != nil {
 		panic(err)
 	}
 
@@ -385,15 +362,6 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 	}()
 
 	handlers(h)
-
-	c := make(chan os.Signal, 1)
-
-	signal.Notify(c, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
-	<-c
-
-	log.Printf("\rExiting...\n")
-
-	os.Exit(0)
 }
 
 type discoveryNotifee struct {
@@ -405,7 +373,7 @@ func (n *discoveryNotifee) HandlePeerFound(pi peer.AddrInfo) {
 	n.PeerChan <- pi
 }
 
-func setupMDNS(ctx context.Context, h host.Host) error {
+func (node *Node) setupMDNS(ctx context.Context, h host.Host) error {
 	n := &discoveryNotifee{}
 	n.PeerChan = make(chan peer.AddrInfo)
 	ser := mdns.NewMdnsService(h, PosemeshService, n)
@@ -419,9 +387,10 @@ func setupMDNS(ctx context.Context, h host.Host) error {
 				ser.Close()
 				return
 			case pi := <-n.PeerChan:
-				log.Println("Found peer:", pi)
+				log.Printf("Found peer: %s in local network\n", pi)
 				if err := h.Connect(context.Background(), pi); err != nil {
 					log.Println("Failed to connect to peer:", err)
+					continue
 				}
 			}
 		}
