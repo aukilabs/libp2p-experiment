@@ -8,7 +8,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-func initPeerIdentity(basePath string) crypto.PrivKey {
+func InitPeerIdentity(basePath string) crypto.PrivKey {
 	var priv crypto.PrivKey
 	f, err := os.Open(basePath + "/peer.key")
 	if err != nil && !os.IsNotExist(err) {

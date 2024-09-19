@@ -16,26 +16,22 @@ import (
 func Ping(ctx context.Context, h host.Host, dest peer.ID) error {
 	s, err := h.NewStream(ctx, dest, node.PING_PROTOCOL_ID)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	go func() {
-		reader := bufio.NewReader(s)
-		for {
-			chunk, err := reader.ReadBytes('\n')
-			if err == io.EOF {
-				return
-			}
-			log.Printf("Received: %s\n", chunk)
-			time.Sleep(2 * time.Second)
-		}
-	}()
-	for {
-		if _, err := s.Write([]byte("ping\n")); err != nil {
-			log.Fatal(err)
-		}
-		time.Sleep(2 * time.Second)
+	if _, err := s.Write([]byte("ping\n")); err != nil {
+		return err
 	}
+	log.Println("##################PING################,", dest)
+
+	reader := bufio.NewReader(s)
+	chunk, err := reader.ReadBytes('\n')
+	if err == io.EOF {
+		return nil
+	}
+	log.Printf("##################Received: %s##################\n", chunk)
+
+	return nil
 }
 
 func PingStreamHandler(s network.Stream) {

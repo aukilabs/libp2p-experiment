@@ -12,6 +12,9 @@ Sessionx.vim
 tags
 [._]*.un~
 
+# Editor
+.vscode
+
 # Compiled source
 *.com
 *.class
@@ -48,3 +51,4 @@ Thumbs.db
 compose
 seaweedfs
 volume
+__debug*

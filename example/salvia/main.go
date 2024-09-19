@@ -7,6 +7,7 @@ import (
 
 	"github.com/aukilabs/go-libp2p-experiment/Libposemesh"
 	"github.com/aukilabs/go-libp2p-experiment/config"
+	"github.com/aukilabs/go-libp2p-experiment/models"
 	"github.com/aukilabs/go-libp2p-experiment/node"
 	"github.com/aukilabs/go-libp2p-experiment/utils"
 	flatbuffers "github.com/google/flatbuffers/go"
@@ -22,6 +23,8 @@ var SalviaCfg = config.Config{
 	Mode:           dht.ModeServer,
 	BootstrapPeers: config.DefaultBootstrapNodes,
 }
+
+var domainList = map[string]models.Domain{}
 
 func main() {
 	name := flag.String("name", "salvia1", "app name")
@@ -41,6 +44,7 @@ func main() {
 		log.Fatalf("Failed to create node: %s\n", err)
 	}
 	n.Start(ctx, &SalviaCfg, func(h host.Host) {
+		utils.EnableDomainCluster(ctx, n, domainList)
 		h.SetStreamHandler(node.UPLOAD_IMAGE_PROTOCOL_ID, func(s network.Stream) {
 			if err := utils.LoadFrameFromStream(s, n.BasePath, func(image *Libposemesh.Image) error {
 				// SKIP: generate pose

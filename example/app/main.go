@@ -27,145 +27,13 @@ import (
 var CameraAppCfg = config.Config{
 	NodeTypes:      []string{"client"},
 	Name:           "camera",
-	Port:           "",
+	Port:           "18888",
 	Mode:           dht.ModeClient,
 	BootstrapPeers: config.DefaultBootstrapNodes,
 }
 
 var domainList = map[string]*Libposemesh.Domain{}
 var portalList = map[string]*Libposemesh.Portal{}
-
-// func SendDataForPoseRefinement(ctx context.Context, h host.Host, dest peer.ID, files []fs.DirEntry, task *taskInfo) error {
-// 	log.Printf("Uploading data to %s..........................\n", dest)
-// 	s, err := h.NewStream(ctx, dest, protocol.ADAM_PROTOCOL_ID)
-// 	if err != nil {
-// 		log.Printf("Failed to open stream to %s: %s\n", dest, err)
-// 		return err
-// 	}
-// 	defer s.Close()
-
-// 	mw := multipart.NewWriter(s)
-// 	mw.SetBoundary("file")
-// 	defer mw.Close()
-// 	part, err := mw.CreateFormFile("task_info", "file")
-// 	if err != nil {
-// 		log.Printf("Failed to create form file: %s\n", err)
-// 		return err
-// 	}
-// 	taskList[task.ID] = *task
-// 	if err := json.NewEncoder(part).Encode(task); err != nil {
-// 		log.Printf("Failed to encode task info: %s\n", err)
-// 		return err
-// 	}
-// 	for _, file := range files {
-// 		part, err = mw.CreateFormFile("file", file.Name())
-// 		if err != nil {
-// 			log.Printf("Failed to create form file: %s\n", err)
-// 			return err
-// 		}
-// 		p := basePath + "/input/" + file.Name()
-// 		f, err := os.Open(p)
-// 		if err != nil {
-// 			log.Printf("Failed to get file info: %s\n", err)
-// 			return err
-// 		}
-// 		defer func() {
-// 			f.Close()
-// 			os.Remove(p)
-// 		}()
-// 		if _, err := io.Copy(part, f); err != nil {
-// 			log.Printf("Failed to copy file: %s\n", err)
-// 			return err
-// 		}
-// 	}
-// 	log.Printf("Uploaded data to %s\n", dest)
-// 	return nil
-// }
-
-// var lock sync.Mutex
-
-// func createCameraJob(ctx context.Context, node nodeInfo, h2 host.Host, msg *pubsub.Message) {
-// 	if len(domainList) == 0 {
-// 		for _, node := range nodeList {
-// 			if node.Type == DISCOVERY_NODE {
-// 				s, err := h2.NewStream(ctx, node.ID, FETCH_DOMAINS_PROTOCOL_ID)
-// 				if err != nil {
-// 					log.Println(err)
-// 					return
-// 				}
-// 				defer s.Close()
-// 				if err := json.NewEncoder(s).Encode(domainsQuery{}); err != nil {
-// 					log.Println(err)
-// 					return
-// 				}
-// 				if err := json.NewDecoder(s).Decode(&domainList); err != nil {
-// 					log.Println(err)
-// 					return
-// 				}
-// 			}
-// 		}
-// 		if len(domainList) == 0 {
-// 			if node.Type != DATA_NODE {
-// 				delete(nodeList, node.ID)
-// 			}
-// 			log.Println("Waiting on domain creation")
-// 			return
-// 		}
-// 	}
-
-// 	// if node.Type == ADAM_NODE {
-// 	// 	lock.Lock()
-// 	// 	defer lock.Unlock()
-// 	// 	if err := os.MkdirAll(basePath+"/input", os.ModePerm); err != nil {
-// 	// 		log.Printf("Failed to create directory: %s\n", err)
-// 	// 		delete(nodeList, node.ID)
-// 	// 		return
-// 	// 	}
-// 	// 	files, err := os.ReadDir(basePath + "/input")
-// 	// 	if err != nil {
-// 	// 		delete(nodeList, node.ID)
-// 	// 		log.Printf("Failed to read directory: %s\n", err)
-// 	// 		return
-// 	// 	}
-// 	// 	if len(files) == 0 {
-// 	// 		delete(nodeList, node.ID)
-// 	// 		return
-// 	// 	}
-// 	// 	log.Printf("Found a %s node, connecting to it %s", node.Type, msg.GetFrom())
-// 	outputs := make([]outputInfo, 0)
-
-// 	var domain domain
-// 	for _, domain = range domainList {
-// 		for _, dataNodeID := range domain.DataNodes {
-// 			outputs = append(outputs, outputInfo{ID: dataNodeID, ProtocolID: UPLOAD_DOMAIN_DATA_PROTOCOL_ID})
-// 		}
-// 		break
-// 	}
-
-// 	jobInfo := jobInfo{
-// 		ID:           uuid.NewString(),
-// 		Name:         "domain setup",
-// 		DomainPubKey: "test",
-// 		State:        "running",
-// 	}
-// 	jobList[jobInfo.ID] = jobInfo
-// 	taskInfo := taskInfo{
-// 		ID:           uuid.NewString(),
-// 		JobID:        jobInfo.ID,
-// 		Name:         "upload video to ADAM",
-// 		DomainPubKey: domain.PublicKey,
-// 		Steps: []stepInfo{{
-// 			Name:    "save domain data to domain data node and replication node",
-// 			Outputs: outputs,
-// 		}},
-// 	}
-// 	// if err := SendDataForPoseRefinement(ctx, h2, msg.GetFrom(), files, &taskInfo); err != nil {
-// 	// 	log.Println("Failed to send data to ADAM node:", err)
-// 	// }
-// 	SendDomainData(ctx, h2, &taskInfo, outputs)
-// 	// delete(nodeList, node.ID)
-// 	// }
-// }
 
 func sendDomainData(ctx context.Context, h host.Host, task *node.JobInfo, outputs []node.OutputInfo) error {
 	for _, output := range outputs {
@@ -541,16 +409,29 @@ func main() {
 			}()
 		}
 		if mode == nil || *mode == "ping" {
-			fmt.Println("finding data nodes...")
-			dataNodes := n.FindNodes(config.DATA_NODE)
-			for len(dataNodes) == 0 {
-				time.Sleep(2 * time.Second)
-				dataNodes = n.FindNodes(config.DATA_NODE)
+			h.SetStreamHandler(node.PING_PROTOCOL_ID, utils.PingStreamHandler)
+			addrStr := "/p2p/12D3KooWAS9CtrdimJqrwSvFzG868iRqFKs6xMrMPZcF2CEkixdC"
+			relayAddrStr := "/ip4/13.52.221.114/udp/18804/quic-v1/p2p/12D3KooWKZXUGZCg982NtauvYKfCLLc7BuQXHd4sCUVqhTEFvGPA/p2p-circuit" + addrStr
+			relayAddr, err := peer.AddrInfoFromString(relayAddrStr)
+			if err != nil {
+				log.Fatal("PARSE", err)
 			}
-
-			fmt.Printf("found %d data nodes", len(dataNodes))
-			if err := utils.Ping(ctx, h, dataNodes[0]); err != nil {
-				log.Fatal(err)
+			addr, err := peer.AddrInfoFromString(addrStr)
+			if err != nil {
+				log.Fatal("PARSE", err)
+			}
+			succ := false
+			for !succ {
+				if err := h.Connect(ctx, *relayAddr); err != nil {
+					log.Println("failed to connect, ", addr.Addrs)
+				} else {
+					// // // succ = true
+					// if err := utils.Ping(ctx, h, addr.ID); err != nil {
+					// 	log.Println("PING", err)
+					// } else {
+					succ = true
+					// }
+				}
 			}
 		}
 	})

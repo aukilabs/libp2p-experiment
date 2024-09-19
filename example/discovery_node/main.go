@@ -2,13 +2,18 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"flag"
+	"io"
 	"log"
 	"os"
 
 	"github.com/aukilabs/go-libp2p-experiment/Libposemesh"
 	"github.com/aukilabs/go-libp2p-experiment/config"
+	"github.com/aukilabs/go-libp2p-experiment/models"
 	"github.com/aukilabs/go-libp2p-experiment/node"
+	"github.com/aukilabs/go-libp2p-experiment/utils"
 	flatbuffers "github.com/google/flatbuffers/go"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -21,47 +26,12 @@ var DiscoveryNodeCfg = config.Config{
 	Name:           "dds_1",
 	Port:           "18804",
 	Mode:           dht.ModeClient,
-	BootstrapPeers: config.DefaultBootstrapNodes,
+	BootstrapPeers: []string{},
+	EnableRelay:    true,
 }
 
-var domainList = map[string]*Libposemesh.Domain{}
+var domainList = map[string]models.Domain{}
 var portalList = map[string]*Libposemesh.Portal{}
-
-func updateClusterSecret(domain *Libposemesh.Domain, clusterSecret string) *Libposemesh.Domain {
-	builder := flatbuffers.NewBuilder(0)
-	domainId := builder.CreateByteString(domain.Id())
-	domainName := builder.CreateByteString(domain.Name())
-	writer := builder.CreateByteString(domain.Writer())
-
-	readerStrs := make([]flatbuffers.UOffsetT, domain.ReadersLength())
-	for i := 0; i < domain.ReadersLength(); i++ {
-		readerStrs[i] = builder.CreateByteString(domain.Readers(i))
-	}
-	Libposemesh.DomainStartReadersVector(builder, domain.ReadersLength())
-	for i := domain.ReadersLength() - 1; i >= 0; i-- {
-		builder.PrependUOffsetT(readerStrs[i])
-	}
-	readers := builder.EndVector(domain.ReadersLength())
-
-	Libposemesh.DomainStart(builder)
-	Libposemesh.DomainAddId(builder, domainId)
-	Libposemesh.DomainAddName(builder, domainName)
-	Libposemesh.DomainAddWriter(builder, writer)
-	Libposemesh.DomainAddReaders(builder, readers)
-	Libposemesh.DomainStartNodesVector(builder, domain.NodesLength())
-	for i := domain.NodesLength() - 1; i >= 0; i-- {
-		builder.PrependUOffsetT(builder.CreateByteString(domain.Nodes(i)))
-	}
-	nodes := builder.EndVector(domain.NodesLength())
-	Libposemesh.DomainAddNodes(builder, nodes)
-	clusterSecretOffset := builder.CreateString(clusterSecret)
-	Libposemesh.DomainAddClusterSecret(builder, clusterSecretOffset)
-
-	d := Libposemesh.DomainEnd(builder)
-	builder.FinishSizePrefixed(d)
-
-	return Libposemesh.GetSizePrefixedRootAsDomain(builder.FinishedBytes(), 0)
-}
 
 func createPortalStreamHandler(portalTopic *pubsub.Topic) func(s network.Stream) {
 	return func(s network.Stream) {
@@ -82,29 +52,6 @@ func createPortalStreamHandler(portalTopic *pubsub.Topic) func(s network.Stream)
 			log.Printf("Failed to publish portal %s: %s\n", portal.ShortId(), err)
 		}
 		log.Printf("Portal %s created\n", portal.ShortId())
-	}
-}
-
-func createDomainStreamHandler(domainTopic *pubsub.Topic) func(s network.Stream) {
-	return func(s network.Stream) {
-		sizebuf := make([]byte, 4)
-		if _, err := s.Read(sizebuf); err != nil {
-			log.Println(err)
-			return
-		}
-		size := flatbuffers.GetSizePrefix(sizebuf, 0)
-		buf := make([]byte, size)
-		if _, err := s.Read(buf); err != nil {
-			log.Println(err)
-			return
-		}
-		domain := Libposemesh.GetRootAsDomain(buf, 0)
-		domain = updateClusterSecret(domain, "cluster_secret")
-		domainList[string(domain.Id())] = domain
-		if err := publishDomain(context.Background(), domainTopic, domain); err != nil {
-			log.Printf("Failed to publish domain %s: %s\n", domain.Id(), err)
-		}
-		log.Printf("Domain %s created\n", domain.Id())
 	}
 }
 
@@ -132,55 +79,77 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to sync domains and portals: %s\n", err)
 		}
-		h.SetStreamHandler(node.CREATE_DOMAIN_PROTOCOL_ID, createDomainStreamHandler(domainTopic))
+
+		// load domains meta file from disk
+		domains, err := os.ReadDir(n.BasePath + "/domains")
+		if err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				log.Fatalf("Failed to read domains directory: %s\n", err)
+			}
+		}
+		for _, d := range domains {
+			if d.IsDir() {
+				meta, err := os.ReadFile(n.BasePath + "/domains/" + d.Name() + "/meta.json")
+				if err != nil {
+					log.Printf("Failed to read domain %s meta file: %s\n", d.Name(), err)
+					continue
+				}
+				var domain models.Domain
+				if err := json.Unmarshal(meta, &domain); err != nil {
+					log.Printf("Failed to unmarshal domain %s meta file: %s\n", d.Name(), err)
+					continue
+				}
+				domainList[domain.ID] = domain
+				publishDomain(ctx, domainTopic, &domain)
+			}
+		}
+		h.SetStreamHandler(node.CREATE_DOMAIN_PROTOCOL_ID, func(s network.Stream) {
+			defer s.Close()
+			createdDomain, err := utils.InitializeDomainCluster(ctx, n, s)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			if err := publishDomain(ctx, domainTopic, createdDomain); err != nil {
+				log.Printf("Failed to publish domain %s: %s\n", createdDomain.ID, err)
+				return
+			}
+			domainList[createdDomain.ID] = *createdDomain
+
+			if err := json.NewEncoder(s).Encode(createdDomain); err != nil {
+				log.Println(err)
+				return
+			}
+		})
 		h.SetStreamHandler(node.CREATE_PORTAL_PROTOCOL_ID, createPortalStreamHandler(portalTopic))
 		h.SetStreamHandler(node.FIND_DOMAIN_PROTOCOL_ID, func(s network.Stream) {
 			defer s.Close()
-			sizeBuf := make([]byte, 4)
-			_, err := s.Read(sizeBuf)
+			idByte, err := io.ReadAll(s)
 			if err != nil {
-				log.Printf("Failed to read size: %s\n", err)
+				log.Println(err)
 				return
 			}
-			buf := make([]byte, flatbuffers.GetSizePrefix(sizeBuf, 0))
-			_, err = s.Read(buf)
-			if err != nil {
-				log.Printf("Failed to read from stream: %s\n", err)
-				return
-			}
-			downloadReq := Libposemesh.GetRootAsDownloadDomainDataReq(buf, 0)
-			domainId := string(downloadReq.DomainId())
-			if domain, ok := domainList[domainId]; ok {
-				builder := flatbuffers.NewBuilder(0)
-				domainID := builder.CreateByteString(domain.Id())
-				domainName := builder.CreateByteString(domain.Name())
-				writer := builder.CreateByteString(domain.Writer())
-
-				readerStrs := make([]flatbuffers.UOffsetT, domain.ReadersLength())
-				for i := 0; i < domain.ReadersLength(); i++ {
-					readerStrs[i] = builder.CreateByteString(domain.Readers(i))
+			domainId := string(idByte)
+			if d, ok := domainList[domainId]; ok {
+				if err := json.NewEncoder(s).Encode(d); err != nil {
+					log.Println(err)
 				}
-				Libposemesh.DomainStartReadersVector(builder, domain.ReadersLength())
-				for i := domain.ReadersLength() - 1; i >= 0; i-- {
-					builder.PrependUOffsetT(readerStrs[i])
-				}
-				readers := builder.EndVector(domain.ReadersLength())
-
-				Libposemesh.DomainStart(builder)
-				Libposemesh.DomainAddId(builder, domainID)
-				Libposemesh.DomainAddName(builder, domainName)
-				Libposemesh.DomainAddWriter(builder, writer)
-				Libposemesh.DomainAddReaders(builder, readers)
-				d := Libposemesh.DomainEnd(builder)
-				builder.FinishSizePrefixed(d)
-
-				if _, err := s.Write(builder.FinishedBytes()); err != nil {
-					log.Printf("Failed to write to stream: %s\n", err)
-					return
-				}
-				s.Close()
 			} else {
-				log.Printf("Domain %s not found\n", domainId)
+				log.Printf("models.Domain %s not found\n", domainId)
+			}
+		})
+		h.SetStreamHandler(node.UPDATE_DOMAIN_PROTOCOL_ID, func(s network.Stream) {
+			defer s.Close()
+			var d models.Domain
+			if err := json.NewDecoder(s).Decode(&d); err != nil {
+				log.Println(err)
+				return
+			}
+		})
+		h.SetStreamHandler(node.FETCH_DOMAINS_PROTOCOL_ID, func(s network.Stream) {
+			defer s.Close()
+			if err := json.NewEncoder(s).Encode(domainList); err != nil {
+				log.Println(err)
 			}
 		})
 	})
@@ -212,46 +181,18 @@ func publishPortals(ctx context.Context, portalTopic *pubsub.Topic) {
 	}
 }
 
-func publishDomain(ctx context.Context, domainTopic *pubsub.Topic, domain *Libposemesh.Domain) error {
-	builder := flatbuffers.NewBuilder(0)
-	domainId := builder.CreateByteString(domain.Id())
-	domainName := builder.CreateByteString(domain.Name())
-	writer := builder.CreateByteString(domain.Writer())
-
-	readerStrs := make([]flatbuffers.UOffsetT, domain.ReadersLength())
-	for i := 0; i < domain.ReadersLength(); i++ {
-		readerStrs[i] = builder.CreateByteString(domain.Readers(i))
+func publishDomain(ctx context.Context, domainTopic *pubsub.Topic, domain *models.Domain) error {
+	d, err := json.Marshal(domain)
+	if err != nil {
+		return err
 	}
-	Libposemesh.DomainStartReadersVector(builder, domain.ReadersLength())
-	for i := domain.ReadersLength() - 1; i >= 0; i-- {
-		builder.PrependUOffsetT(readerStrs[i])
-	}
-	readers := builder.EndVector(domain.ReadersLength())
-
-	Libposemesh.DomainStart(builder)
-	Libposemesh.DomainAddId(builder, domainId)
-	Libposemesh.DomainAddName(builder, domainName)
-	Libposemesh.DomainAddWriter(builder, writer)
-	Libposemesh.DomainAddReaders(builder, readers)
-	Libposemesh.DomainStartNodesVector(builder, domain.NodesLength())
-	for i := domain.NodesLength() - 1; i >= 0; i-- {
-		builder.PrependUOffsetT(builder.CreateByteString(domain.Nodes(i)))
-	}
-	nodes := builder.EndVector(domain.NodesLength())
-	Libposemesh.DomainAddNodes(builder, nodes)
-	clusterSecret := builder.CreateByteString(domain.ClusterSecret())
-	Libposemesh.DomainAddClusterSecret(builder, clusterSecret)
-
-	d := Libposemesh.DomainEnd(builder)
-	builder.FinishSizePrefixed(d)
-
-	return domainTopic.Publish(ctx, builder.FinishedBytes())
+	return domainTopic.Publish(ctx, d)
 }
 
 func publishDomains(ctx context.Context, domainTopic *pubsub.Topic) {
 	for _, domain := range domainList {
-		if err := publishDomain(ctx, domainTopic, domain); err != nil {
-			log.Printf("Failed to publish domain %s: %s\n", domain.Id(), err)
+		if err := publishDomain(ctx, domainTopic, &domain); err != nil {
+			log.Printf("Failed to publish domain %s: %s\n", domain.ID, err)
 		}
 	}
 }
@@ -292,14 +233,16 @@ func receiveDomains(ctx context.Context, domainSub *pubsub.Subscription, h host.
 			continue
 		}
 		if msg.GetFrom() != h.ID() {
-			domain := Libposemesh.GetSizePrefixedRootAsDomain(msg.Data, 0)
-			domainId := string(domain.Id())
-			domainList[domainId] = domain
-			if err := os.MkdirAll(basePath+"/domains", os.ModePerm); err != nil {
+			var d models.Domain
+			if err := json.Unmarshal(msg.Data, &d); err != nil {
+				log.Printf("invalid message: %s\n", msg.Data)
+				continue
+			}
+			if err := os.MkdirAll(basePath+"/domains/"+d.ID, os.ModePerm); err != nil {
 				log.Printf("Failed to create directory: %s\n", err)
 				continue
 			}
-			f, err := os.Create(basePath + "/domains/" + domainId)
+			f, err := os.Create(basePath + "/domains/" + d.ID + "/meta.json")
 			if err != nil {
 				log.Printf("Failed to create file: %s\n", err)
 				continue

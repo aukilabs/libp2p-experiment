@@ -11,6 +11,7 @@ import (
 
 	"github.com/aukilabs/go-libp2p-experiment/Libposemesh"
 	"github.com/aukilabs/go-libp2p-experiment/config"
+	"github.com/aukilabs/go-libp2p-experiment/models"
 	"github.com/aukilabs/go-libp2p-experiment/node"
 	"github.com/aukilabs/go-libp2p-experiment/utils"
 	flatbuffers "github.com/google/flatbuffers/go"
@@ -28,7 +29,7 @@ var DataNodeConfig = config.Config{
 	BootstrapPeers: config.DefaultBootstrapNodes,
 }
 
-var domainList = map[string]*Libposemesh.Domain{}
+var domainList = map[string]models.Domain{}
 var portalList = map[string]*Libposemesh.Portal{}
 
 func main() {
@@ -44,20 +45,13 @@ func main() {
 		Types: DataNodeConfig.NodeTypes,
 	}
 	DataNodeConfig.Name = *name
-	n, err := node.NewNode(info, "volume")
+	n, err := node.NewNode(info, "../../volume")
 	if err != nil {
 		log.Fatalf("Failed to create node: %s\n", err)
 	}
 	n.Start(ctx, &DataNodeConfig, func(h host.Host) {
-		h.SetStreamHandler(node.UPLOAD_DOMAIN_DATA_PROTOCOL_ID, func(s network.Stream) {
-			defer s.Close()
-			if err := utils.ReceiveDomainData(ctx, s, n.BasePath, classifyDomainData); err != nil {
-				log.Printf("Failed to receive domain data: %s\n", err)
-				return
-			}
-		})
-		h.SetStreamHandler(node.DOWNLOAD_DOMAIN_DATA_PROTOCOL_ID, onDownloadDomainDataReqReceived(ctx, path.Join(n.BasePath, "domaindata")))
 		h.SetStreamHandler(node.PING_PROTOCOL_ID, utils.PingStreamHandler)
+		utils.EnableDomainCluster(ctx, n, domainList)
 	})
 }
 
