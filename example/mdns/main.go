@@ -58,7 +58,7 @@ func main() {
 		if res.Error != nil {
 			log.Fatal(res.Error)
 		}
-		fmt.Printf("Pinged %s", nodes[0])
+		fmt.Printf("Pinged %s in %s", nodes[0], res.RTT)
 	})
 
 	c := make(chan os.Signal, 1)

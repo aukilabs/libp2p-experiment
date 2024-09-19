@@ -67,7 +67,7 @@ func main() {
 				log.Printf("Failed to ping peer: %s\n", res.Error)
 				continue
 			}
-			log.Println("Pinged peer")
+			log.Printf("Pinged peer %s in %s", addr.ID, res.RTT)
 		}
 		cancel()
 
@@ -95,7 +95,7 @@ func main() {
 				log.Printf("Failed to ping peer: %s\n", res.Error)
 				continue
 			}
-			log.Println("Pinged peer")
+			log.Printf("Pinged peer %s in %s", addr.ID, res.RTT)
 		}
 	})
 
