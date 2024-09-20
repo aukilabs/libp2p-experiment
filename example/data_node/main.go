@@ -7,7 +7,9 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/signal"
 	"path"
+	"syscall"
 
 	"github.com/aukilabs/go-libp2p-experiment/Libposemesh"
 	"github.com/aukilabs/go-libp2p-experiment/config"
@@ -53,6 +55,15 @@ func main() {
 		h.SetStreamHandler(node.PING_PROTOCOL_ID, utils.PingStreamHandler)
 		utils.EnableDomainCluster(ctx, n, domainList)
 	})
+
+	c := make(chan os.Signal, 1)
+
+	signal.Notify(c, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+	<-c
+
+	log.Printf("\rExiting...\n")
+
+	os.Exit(0)
 }
 
 var domainDataSubs = utils.NewDomainDataSubscribers()

@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/aukilabs/go-libp2p-experiment/config"
@@ -64,7 +67,7 @@ func main() {
 				log.Printf("Failed to ping peer: %s\n", res.Error)
 				continue
 			}
-			log.Println("Pinged peer")
+			log.Printf("Pinged peer %s in %s", addr.ID, res.RTT)
 		}
 		cancel()
 
@@ -92,7 +95,16 @@ func main() {
 				log.Printf("Failed to ping peer: %s\n", res.Error)
 				continue
 			}
-			log.Println("Pinged peer")
+			log.Printf("Pinged peer %s in %s", addr.ID, res.RTT)
 		}
 	})
+
+	c := make(chan os.Signal, 1)
+
+	signal.Notify(c, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+	<-c
+
+	log.Printf("\rExiting...\n")
+
+	os.Exit(0)
 }
