@@ -1,7 +1,11 @@
 # libp2p Hole Punching Example
 
 ## Overview
-This project demonstrates how to implement hole punching in a libp2p network using Go. The success rate of UDP hole punching is typically higher than with TCP. 
+This project showcases how to implement hole punching in a libp2p network using Go. It leverages [AutoNAT](https://docs.libp2p.io/concepts/nat/autonat/) to detect whether a node is behind a NAT. If a node is behind NAT, it finds potential relays within the posemesh and reserves a slot for communication. Once the relay connection is established, the [Identify](https://github.com/libp2p/specs/blob/master/identify/README.md) protocol informs other peers that they can connect to you through this relay.
+
+Additionally, [Identify](https://github.com/libp2p/specs/blob/master/identify/README.md) is used to discover your IP address, and having a public IP is essential to initiate hole punching.
+
+Whenever a direct connection becomes possible, we will seamlessly switch the traffic from the relay connections to the direct connection.
 
 - UPnP (Universal Plug and Play) will be used if possible to establish direct connections.
 - If UPnP is not available, a relay node will act as the final fallback for connections.

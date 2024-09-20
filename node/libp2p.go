@@ -26,10 +26,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
-	quicTransport "github.com/libp2p/go-libp2p/p2p/transport/quic"
-	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
-	ws "github.com/libp2p/go-libp2p/p2p/transport/websocket"
-	webtransport "github.com/libp2p/go-libp2p/p2p/transport/webtransport"
 )
 
 const PosemeshService = "posemesh"
@@ -183,10 +179,7 @@ func (node *Node) Start(ctx context.Context, cfg *config.Config, handlers func(h
 			"/ip4/0.0.0.0/udp/"+port+"/quic-v1/webtransport",
 			"/ip6/::/udp/"+port+"/quic-v1/webtransport",
 		),
-		libp2p.Transport(quicTransport.NewTransport),
-		libp2p.Transport(webtransport.New),
-		libp2p.Transport(ws.New),
-		libp2p.Transport(tcp.NewTCPTransport),
+		libp2p.DefaultTransports,
 		// libp2p.Security(libp2ptls.ID, libp2ptls.New),
 		// support noise connections
 		// libp2p.Security(noise.ID, noise.New),
