@@ -52,3 +52,6 @@ compose
 seaweedfs
 volume
 __debug*
+
+# Rust
+target/
