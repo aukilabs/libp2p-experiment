@@ -16,3 +16,6 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [build-dependencies]
 cxx-build = "1.0.128"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
