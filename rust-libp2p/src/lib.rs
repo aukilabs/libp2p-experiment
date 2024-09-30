@@ -21,7 +21,18 @@
 #![doc = include_str!("../README.md")]
 
 use futures::stream::StreamExt;
-use libp2p::{gossipsub, mdns, noise, swarm::NetworkBehaviour, swarm::SwarmEvent, tcp, yamux, PeerId};
+use libp2p::{
+    gossipsub,
+    mdns,
+    noise,
+    swarm::{NetworkBehaviour,SwarmEvent},
+    tcp,
+    yamux,
+    PeerId,
+    core::muxing::StreamMuxerBox,
+    multiaddr::{Multiaddr, Protocol},
+    Transport,
+};
 use std::collections::{hash_map::DefaultHasher,HashMap};
 use std::error::Error;
 use std::hash::{Hash, Hasher};
@@ -31,6 +42,9 @@ use tracing_subscriber::EnvFilter;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use tokio::runtime::Runtime;
+use rand::thread_rng;
+use libp2p_webrtc as webrtc;
+use std::net::Ipv4Addr;
 
 #[cxx::bridge]
 mod ffi {
@@ -110,6 +124,13 @@ pub async fn start_libp2p() -> Result<(), Box<dyn Error>> {
             yamux::Config::default,
         )?
         .with_quic()
+        .with_other_transport(|id_keys| {
+            Ok(webrtc::tokio::Transport::new(
+                id_keys.clone(),
+                webrtc::tokio::Certificate::generate(&mut thread_rng())?,
+            )
+            .map(|(peer_id, conn), _| (peer_id, StreamMuxerBox::new(conn))))
+        })?
         .with_behaviour(|key| {
             // To content-address message, we can take the hash of message and use it as an ID.
             let message_id_fn = |message: &gossipsub::Message| {
@@ -144,9 +165,14 @@ pub async fn start_libp2p() -> Result<(), Box<dyn Error>> {
     // subscribes to our topic
     swarm.behaviour_mut().gossipsub.subscribe(&topic)?;
 
+    let address_webrtc = Multiaddr::from(Ipv4Addr::UNSPECIFIED)
+        .with(Protocol::Udp(0))
+        .with(Protocol::WebRTCDirect);
+
     // Listen on all interfaces and whatever port the OS assigns
     swarm.listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse()?)?;
     swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
+    swarm.listen_on(address_webrtc.clone())?;
 
     let mut connected_peers = 0;
     // Periodically check the peer count and publish if peers are available

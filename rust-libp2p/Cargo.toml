@@ -8,6 +8,8 @@ cxx = "1.0.128"
 futures = "0.3.30"
 lazy_static = "1.5.0"
 libp2p = { version = "0.54.1", features = [ "tokio", "gossipsub", "mdns", "noise", "macros", "tcp", "yamux", "quic"] }
+libp2p-webrtc = { version = "0.8.0-alpha", features = ["tokio"] }
+rand = "0.8.5"
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.128"
 tokio = { version = "1.40.0", features = ["full"] }
