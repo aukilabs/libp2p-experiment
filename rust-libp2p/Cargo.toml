@@ -4,20 +4,29 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-cxx = "1.0.128"
 futures = "0.3.30"
 lazy_static = "1.5.0"
-libp2p = { version = "0.54.1", features = [ "tokio", "gossipsub", "mdns", "noise", "macros", "tcp", "yamux", "quic"] }
-libp2p-webrtc = { version = "0.8.0-alpha", features = ["tokio"] }
-rand = "0.8.5"
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.128"
-tokio = { version = "1.40.0", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+rand = "0.8.5"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+cxx = "1.0.128"
+libp2p = { path = "../../rust-libp2p/libp2p", features = [ "tokio", "gossipsub", "mdns", "noise", "macros", "tcp", "yamux", "quic"] }
+libp2p-webrtc = { version = "0.8.0-alpha", features = ["tokio"] }
+tokio = { version = "1.40.0", features = ["full"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+libp2p = { path = "../../rust-libp2p/libp2p", features = [ "wasm-bindgen", "gossipsub", "macros" ] }
+libp2p-webrtc-websys = { path = "../../rust-libp2p/transports/webrtc-websys" }
+tracing-wasm = "0.2.1"
+wasm-bindgen = "0.2.90"
+wasm-bindgen-futures = "0.4.42"
 
 [build-dependencies]
 cxx-build = "1.0.128"
 
 [lib]
-crate-type = ["staticlib", "rlib"]
+crate-type = ["cdylib", "rlib"]

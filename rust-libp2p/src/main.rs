@@ -17,7 +17,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
-
+#![cfg(not(target_arch = "wasm32"))]
 #![doc = include_str!("../README.md")]
 
 use rust_libp2p::start_libp2p;
