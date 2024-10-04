@@ -14,6 +14,7 @@ https://github.com/libp2p/rust-libp2p/pull/5569, https://doc.rust-lang.org/cargo
 https://github.com/rustwasm/wasm-bindgen/discussions/3500
 https://github.com/rustwasm/wasm-bindgen/issues/2160
 https://webassembly.github.io/wabt/demo/wasm2wat/ or install from https://github.com/WebAssembly/wabt/releases
+https://oudwud.dev/2023/05/10/made-rust-libp2p-gossipsub-work-in-wasm.html
 ```
 
 $ ~/Downloads/wabt-1.0.36/bin/wasm2wat pkg/rust_libp2p_bg.wasm | grep env

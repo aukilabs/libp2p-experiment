@@ -1452,6 +1452,7 @@ dependencies = [
  "libp2p-mdns",
  "libp2p-metrics",
  "libp2p-noise 0.45.0",
+ "libp2p-ping",
  "libp2p-quic",
  "libp2p-swarm",
  "libp2p-tcp",
@@ -1660,6 +1661,7 @@ dependencies = [
  "libp2p-core 0.42.0 (git+https://github.com/libp2p/rust-libp2p.git?rev=8ceadaa)",
  "libp2p-gossipsub",
  "libp2p-identity",
+ "libp2p-ping",
  "libp2p-swarm",
  "pin-project",
  "prometheus-client",
@@ -1715,6 +1717,23 @@ dependencies = [
  "tracing",
  "x25519-dalek",
  "zeroize",
+]
+
+[[package]]
+name = "libp2p-ping"
+version = "0.45.0"
+source = "git+https://github.com/libp2p/rust-libp2p.git?rev=8ceadaa#8ceadaac5aec4b462463ef4082d6af577a3158b1"
+dependencies = [
+ "either",
+ "futures",
+ "futures-timer",
+ "libp2p-core 0.42.0 (git+https://github.com/libp2p/rust-libp2p.git?rev=8ceadaa)",
+ "libp2p-identity",
+ "libp2p-swarm",
+ "rand",
+ "tracing",
+ "void",
+ "web-time",
 ]
 
 [[package]]
@@ -2867,7 +2886,6 @@ dependencies = [
  "cxx",
  "cxx-build",
  "futures",
- "lazy_static",
  "libp2p",
  "libp2p-webrtc",
  "libp2p-webrtc-websys",

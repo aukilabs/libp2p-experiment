@@ -21,9 +21,9 @@
 #![doc = include_str!("../README.md")]
 
 use futures::stream::StreamExt;
-use libp2p::{gossipsub,swarm::{NetworkBehaviour,SwarmEvent},PeerId};
+use libp2p::{ping,swarm::{NetworkBehaviour,SwarmEvent},PeerId};
 #[cfg(not(target_arch = "wasm32"))]
-use libp2p::{mdns,noise,tcp,yamux,Transport,core::muxing::StreamMuxerBox,multiaddr::{Multiaddr, Protocol}};
+use libp2p::{gossipsub,mdns,noise,tcp,yamux,Transport,core::muxing::StreamMuxerBox,multiaddr::{Multiaddr, Protocol}};
 use std::collections::{hash_map::DefaultHasher,HashMap};
 use std::error::Error;
 use std::hash::{Hash, Hasher};
@@ -53,12 +53,19 @@ mod ffi {
     extern "Rust" {
         // Synchronous wrapper for the async function
         fn start_libp2p_sync() -> String;
+        type Counter;
+
+        fn new_counter() -> Box<Counter>;
+        fn add(self: &mut Counter, value: i32);
+        fn sub(self: &mut Counter, value: i32);
+        fn get(self: &Counter) -> i32;
     }
 }
 
 // We create a custom network behaviour that combines Gossipsub and Mdns.
 #[derive(NetworkBehaviour)]
 struct MyBehaviour {
+    #[cfg(not(target_arch = "wasm32"))]
     gossipsub: gossipsub::Behaviour,
     #[cfg(not(target_arch = "wasm32"))]
     mdns: mdns::tokio::Behaviour,
@@ -124,37 +131,14 @@ pub async fn start_libp2p() -> Result<(), JsError> {
         .with_other_transport(|key| {
             webrtc_websys::Transport::new(webrtc_websys::Config::new(&key))
         })?
-        .with_behaviour(|key| {
-            // To content-address message, we can take the hash of message and use it as an ID.
-            let message_id_fn = |message: &gossipsub::Message| {
-                let mut s = DefaultHasher::new();
-                message.data.hash(&mut s);
-                gossipsub::MessageId::from(s.finish().to_string())
-            };
-
-            // Set a custom gossipsub configuration
-            let gossipsub_config = gossipsub::ConfigBuilder::default()
-                .heartbeat_interval(Duration::from_secs(10)) // This is set to aid debugging by not cluttering the log space
-                .validation_mode(gossipsub::ValidationMode::Strict) // This sets the kind of message validation. The default is Strict (enforce message signing)
-                .message_id_fn(message_id_fn) // content-address messages. No two messages of the same content will be propagated.
-                .build()
-                .map_err(|msg| io::Error::new(io::ErrorKind::Other, msg))?; // Temporary hack because `build` does not return a proper `std::error::Error`.
-
-            // build a gossipsub network behaviour
-            let gossipsub = gossipsub::Behaviour::new(
-                gossipsub::MessageAuthenticity::Signed(key.clone()),
-                gossipsub_config,
-            )?;
-
-            Ok(MyBehaviour { gossipsub })
-        })?
+        .with_behaviour(|_| ping::Behaviour::new(ping::Config::new()))?
         .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
         .build();
 
     // Create a Gossipsub topic
-    let topic = gossipsub::IdentTopic::new("Posemesh");
+    // let topic = gossipsub::IdentTopic::new("Posemesh");
     // subscribes to our topic
-    swarm.behaviour_mut().gossipsub.subscribe(&topic)?;
+    // swarm.behaviour_mut().gossipsub.subscribe(&topic)?;
 
     // let address_webrtc = Multiaddr::from(Ipv4Addr::UNSPECIFIED)
     //     .with(Protocol::Udp(0))
@@ -173,7 +157,7 @@ pub async fn start_libp2p() -> Result<(), JsError> {
     let peer_id = swarm.local_peer_id().clone();
     let node_info = create_node(peer_id);
     let serialized = serde_json::to_vec(&node_info)?;
-    swarm.behaviour_mut().gossipsub.publish(topic.clone(), serialized)?;
+    // swarm.behaviour_mut().gossipsub.publish(topic.clone(), serialized)?;
 
     // Kick it off
     loop {
@@ -193,21 +177,21 @@ pub async fn start_libp2p() -> Result<(), JsError> {
         //     }
         // },
         match swarm.next().await.unwrap() {
-            SwarmEvent::Behaviour(MyBehaviourEvent::Gossipsub(gossipsub::Event::Message {
-                propagation_source: _peer_id,
-                message_id: _id,
-                message,
-            })) => {
-                match serde_json::from_slice::<Node>(&message.data) {
-                    Ok(node) => {
-                        println!("Got node info: {:?}", node);
-                        nodes_map.insert(node.id.clone(), node);
-                    },
-                    Err(e) => {
-                        println!("Failed to deserialize node info: {}", e);
-                    }
-                }
-            },
+            // SwarmEvent::Behaviour(MyBehaviourEvent::Gossipsub(gossipsub::Event::Message {
+            //     propagation_source: _peer_id,
+            //     message_id: _id,
+            //     message,
+            // })) => {
+            //     match serde_json::from_slice::<Node>(&message.data) {
+            //         Ok(node) => {
+            //             println!("Got node info: {:?}", node);
+            //             nodes_map.insert(node.id.clone(), node);
+            //         },
+            //         Err(e) => {
+            //             println!("Failed to deserialize node info: {}", e);
+            //         }
+            //     }
+            // },
             SwarmEvent::NewListenAddr { address, .. } => {
                 println!("Local node is listening on {address}");
             },
@@ -345,4 +329,40 @@ pub async fn start_libp2p() -> Result<(), Box<dyn Error>> {
             }
         }
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub struct Counter {
+    res: i32,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+impl Counter {
+    // Constructor
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Counter {
+        Counter { res: 0 }
+    }
+
+    // Add function
+    pub fn add(&mut self, value: i32) {
+        self.res += value;
+    }
+
+    // Subtract function
+    pub fn sub(&mut self, value: i32) {
+        self.res -= value;
+    }
+
+    // Get the current value
+    pub fn get(&self) -> i32 {
+        self.res
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn new_counter() -> Box<Counter> {
+    Box::new(Counter::new())
 }
